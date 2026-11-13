@@ -8,6 +8,9 @@ const { ClipStore } = require('./clipstore');
 const { ClipWatcher } = require('./clipwatch');
 const { TodoStore, dayKey, dayLabel } = require('./todostore');
 const { Inbox, isAllowed } = require('./inbox');
+const { MailAccount, testAccount } = require('./mail');
+const { PRESETS, normalizeAccount } = require('./mailpresets');
+const { Secrets } = require('./secrets');
 const fs = require('fs');
 
 // 岛窗口的尺寸要能装下最大的展开面板；没有内容的透明区域会把点击穿透给下面的软件
@@ -360,6 +363,84 @@ function setupInbox() {
   ipcMain.on('notify:open-settings', () => shell.openExternal('ms-settings:privacy-notifications'));
 }
 
+// ---------- 邮箱 ----------
+let secrets = null;
+const mailboxes = new Map(); // id -> MailAccount
+const mailStatus = {};       // id -> { state, error }
+
+function startMailbox(acc) {
+  stopMailbox(acc.id);
+  if (!acc.enabled) { mailStatus[acc.id] = { state: 'stopped', error: '' }; return; }
+  const pass = secrets.get(acc.id);
+  if (!pass) { mailStatus[acc.id] = { state: 'error', error: '没有找到保存的授权码，请重新填写' }; broadcast('mail:status', mailStatus); return; }
+  const box = new MailAccount(acc, pass);
+  box.on('status', (s) => { mailStatus[s.id] = { state: s.state, error: s.error }; broadcast('mail:status', mailStatus); });
+  box.on('mail', (m) => {
+    const item = inbox.add(Object.assign({}, m, { read: !m.alert }));
+    if (!item) return;
+    if (m.alert) broadcast('inbox:new', { item, unread: inbox.unread(), popup: store.get().notifyPopup });
+    else broadcast('inbox:changed', { unread: inbox.unread() });
+  });
+  mailboxes.set(acc.id, box);
+  box.start();
+}
+
+function stopMailbox(id) {
+  const box = mailboxes.get(id);
+  if (box) { box.removeAllListeners('mail'); box.stop(); mailboxes.delete(id); }
+}
+
+function setupMail() {
+  secrets = new Secrets(app.getPath('userData'));
+  for (const acc of store.get().mailAccounts) startMailbox(acc);
+
+  ipcMain.handle('mail:presets', () => PRESETS.map((p) => ({ id: p.id, name: p.name, host: p.host, port: p.port, help: p.help, domains: p.domains })));
+  ipcMain.handle('mail:accounts', () => ({ accounts: store.get().mailAccounts, status: mailStatus, encryption: secrets.available() }));
+  // 保存前先试着登录一次，登不上就不保存
+  ipcMain.handle('mail:save', async (_e, input, password) => {
+    let acc;
+    try { acc = normalizeAccount(input || {}); } catch (e) { return { ok: false, error: e.message }; }
+    const list = store.get().mailAccounts;
+    const existing = list.find((a) => a.id === acc.id);
+    const pass = password || (existing ? secrets.get(acc.id) : null);
+    if (!pass) return { ok: false, error: '请填写授权码' };
+    const r = await testAccount(acc, pass);
+    if (!r.ok) return r;
+    try { secrets.set(acc.id, pass); } catch (e) { return { ok: false, error: e.message }; }
+    const next = existing ? list.map((a) => (a.id === acc.id ? acc : a)) : list.concat([acc]);
+    applyConfig({ mailAccounts: next });
+    startMailbox(acc);
+    return { ok: true, total: r.total, account: acc };
+  });
+  ipcMain.handle('mail:remove', (_e, id) => {
+    stopMailbox(id);
+    secrets.remove(id);
+    delete mailStatus[id];
+    inbox.items = inbox.items.filter((x) => x.accountId !== id);
+    applyConfig({ mailAccounts: store.get().mailAccounts.filter((a) => a.id !== id) });
+    broadcast('inbox:changed', { unread: inbox.unread() });
+    broadcast('mail:status', mailStatus);
+    return true;
+  });
+  ipcMain.handle('mail:toggle', (_e, id, enabled) => {
+    const next = store.get().mailAccounts.map((a) => (a.id === id ? Object.assign({}, a, { enabled: !!enabled }) : a));
+    applyConfig({ mailAccounts: next });
+    const acc = next.find((a) => a.id === id);
+    if (acc) startMailbox(acc);
+    return true;
+  });
+  ipcMain.handle('mail:retry', (_e, id) => {
+    const acc = store.get().mailAccounts.find((a) => a.id === id);
+    if (acc) startMailbox(acc);
+    return true;
+  });
+  ipcMain.handle('mail:body', async (_e, accountId, uid) => {
+    const box = mailboxes.get(accountId);
+    if (!box) return { error: '这个邮箱没有在运行' };
+    try { return await box.body(uid); } catch (e) { return { error: e.message }; }
+  });
+}
+
 function setupIpc() {
   ipcMain.handle('config:get', () => store.get());
   ipcMain.handle('config:set', (_e, patch) => applyConfig(patch || {}));
@@ -397,6 +478,7 @@ app.whenReady().then(() => {
   setupClips();
   setupTodos();
   setupInbox();
+  setupMail();
   createIsland();
   buildTray();
   registerShortcuts();
@@ -411,6 +493,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (native) native.stop();
   if (clipWatcher) clipWatcher.stop();
+  for (const id of Array.from(mailboxes.keys())) stopMailbox(id);
 });
 // 关掉设置窗口不退出，常驻托盘
 app.on('window-all-closed', () => {});

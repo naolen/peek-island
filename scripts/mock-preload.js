@@ -91,6 +91,19 @@ contextBridge.exposeInMainWorld('peek', {
     const item = inbox.add({ kind: 'notify', id: Date.now(), app: '飞书', title: '张总', body: '方案我看过了，挺好，下班前发我终版', time: Date.now() });
     listeners.inbox.forEach((f) => f({ item, unread: inbox.unread(), popup: true }));
   },
+  mailPresets: async () => require('../src/mailpresets').PRESETS,
+  mailAccounts: async () => ({
+    accounts: [
+      { id: 'm1', preset: 'qq', email: 'demo@qq.com', label: 'QQ 邮箱', host: 'imap.qq.com', port: 993, enabled: true },
+      { id: 'm2', preset: 'gmail', email: 'demo@gmail.com', label: 'Gmail', host: 'imap.gmail.com', port: 993, enabled: true }
+    ],
+    status: { m1: { state: 'ok', error: '' }, m2: { state: 'error', error: '账号或授权码不对（注意要填授权码 / 应用专用密码，不是登录密码）' } },
+    encryption: true
+  }),
+  mailSave: async () => ({ ok: false, error: '演示模式' }),
+  mailRemove: async () => true, mailToggle: async () => true, mailRetry: async () => true,
+  mailBody: async () => ({ subject: '本周数据周报', from: '数据组 <data@example.com>', date: Date.now() - 2 * 3600e3, text: '大家好：\n\n附件为本周各渠道数据汇总，请查收。\n\n数据组', attachments: ['周报.xlsx'] }),
+  onMailStatus: () => {},
   setFocus: () => {},
   onPageOpen: (cb) => { window.__openPage = cb; },
   getShortcuts: async () => ({}),

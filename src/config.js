@@ -32,6 +32,8 @@ const DEFAULTS = {
   notifyMuted: [],
   // 见过的发通知的应用，设置里列出来让用户勾选
   notifyKnownApps: [],
+  // 邮箱账户（授权码不在这里，加密存在 mail-secrets.json）
+  mailAccounts: [],
   // 待办：没做完的事第二天自动顺延
   todoRollover: true,
   todoKey: 'Control+Alt+T',
@@ -67,6 +69,14 @@ function sanitize(cfg) {
   out.notify = out.notify !== false;
   out.notifyPopup = out.notifyPopup !== false;
   out.notifyAll = out.notifyAll === true;
+  out.mailAccounts = (Array.isArray(out.mailAccounts) ? out.mailAccounts : [])
+    .filter((a) => a && typeof a.id === 'string' && typeof a.email === 'string' && typeof a.host === 'string')
+    .map((a) => ({
+      id: a.id, preset: String(a.preset || 'custom'), email: a.email, user: String(a.user || a.email),
+      host: a.host, port: clampInt(a.port, 1, 65535, 993), secure: a.secure !== false,
+      label: String(a.label || a.email).slice(0, 20), enabled: a.enabled !== false
+    }))
+    .slice(0, 10);
   for (const k of ['notifyAllowed', 'notifyMuted', 'notifyKnownApps']) {
     out[k] = Array.from(new Set((Array.isArray(out[k]) ? out[k] : []).filter((x) => typeof x === 'string' && x).map((x) => x.slice(0, 60)))).slice(0, 100);
   }

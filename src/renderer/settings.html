@@ -74,6 +74,30 @@
     </section>
 
     <section class="card">
+      <div class="card-title">邮箱 <span class="hint">新邮件会在岛上提醒；只读取，不会把邮件标成已读，也不下载附件和图片</span></div>
+      <div id="mailList" class="mail-list"></div>
+      <div id="mailForm" class="mail-form">
+        <div class="grid">
+          <label class="field">邮箱类型
+            <select id="mailPreset" class="input"></select>
+          </label>
+          <label class="field">邮箱地址<input id="mailEmail" class="input" type="email" placeholder="name@qq.com" autocomplete="off"></label>
+          <label class="field">授权码 / 应用专用密码<input id="mailPass" class="input" type="password" autocomplete="new-password" placeholder="不是登录密码"></label>
+          <label class="field custom-only">IMAP 服务器<input id="mailHost" class="input" placeholder="imap.example.com"></label>
+          <label class="field custom-only">端口<input id="mailPort" class="input" type="number" value="993"></label>
+          <label class="field">显示名称（可选）<input id="mailLabel" class="input" maxlength="20" placeholder="例如：工作邮箱"></label>
+        </div>
+        <div id="mailHelp" class="hint"></div>
+        <div class="row">
+          <button id="mailSave" class="btn primary" type="button">测试并保存</button>
+          <button id="mailCancel" class="btn" type="button">取消</button>
+          <span id="mailMsg" class="hint"></span>
+        </div>
+      </div>
+      <button id="mailAdd" class="btn-dashed" type="button">＋ 添加邮箱</button>
+    </section>
+
+    <section class="card">
       <div class="card-title">剪贴板与待办</div>
       <div class="grid">
         <label class="field">记录剪贴板

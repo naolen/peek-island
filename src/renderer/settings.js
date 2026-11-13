@@ -257,6 +257,124 @@
     api.onNotifyStatus((s) => { notifyStatus = s; renderNotify(); });
   }
 
+  // ---------- 邮箱 ----------
+  let presets = [];
+  let mail = { accounts: [], status: {}, encryption: true };
+  let editingMail = null; // 正在编辑的账户 id；null = 新增
+  const STATE_TEXT = { ok: '已连接', connecting: '连接中…', stopped: '已暂停', idle: '' };
+
+  function renderMail() {
+    const list = $('mailList');
+    if (!mail.accounts.length) {
+      list.innerHTML = '<span class="hint">还没有添加邮箱</span>';
+    } else {
+      list.innerHTML = mail.accounts.map((a) => {
+        const s = mail.status[a.id] || { state: a.enabled ? 'connecting' : 'stopped' };
+        const text = s.state === 'error' ? s.error : STATE_TEXT[s.state] || '';
+        return `<div class="mail-row" data-id="${esc(a.id)}">
+          <span class="name">${esc(a.label)}</span><span class="addr">${esc(a.email)}</span>
+          <span class="state ${esc(s.state)}" title="${esc(text)}">${esc(text)}</span>
+          ${s.state === 'error' ? '<button type="button" class="mini-btn" data-op="retry">重试</button>' : ''}
+          <button type="button" class="mini-btn" data-op="edit">修改</button>
+          <button type="button" class="mini-btn" data-op="toggle">${a.enabled ? '暂停' : '启用'}</button>
+          <button type="button" class="mini-btn danger" data-op="remove">删除</button>
+        </div>`;
+      }).join('');
+    }
+    if (!mail.encryption) $('mailMsg').textContent = '当前系统不支持加密保存，无法记住授权码';
+  }
+
+  function presetOf(id) { return presets.find((p) => p.id === id) || presets[presets.length - 1]; }
+  function syncPresetUi() {
+    const p = presetOf($('mailPreset').value);
+    $('mailForm').classList.toggle('custom', p && p.id === 'custom');
+    $('mailHelp').textContent = p ? p.help : '';
+  }
+
+  function openMailForm(acc) {
+    editingMail = acc ? acc.id : null;
+    $('mailPreset').value = acc ? acc.preset : 'qq';
+    $('mailEmail').value = acc ? acc.email : '';
+    $('mailPass').value = '';
+    $('mailPass').placeholder = acc ? '不修改就留空' : '不是登录密码';
+    $('mailHost').value = acc ? acc.host : '';
+    $('mailPort').value = acc ? acc.port : 993;
+    $('mailLabel').value = acc ? acc.label : '';
+    $('mailMsg').textContent = '';
+    syncPresetUi();
+    $('mailForm').classList.add('show');
+    $('mailAdd').style.display = 'none';
+    $('mailEmail').focus();
+  }
+  function closeMailForm() {
+    $('mailForm').classList.remove('show');
+    $('mailAdd').style.display = '';
+    $('mailPass').value = '';
+    editingMail = null;
+  }
+
+  $('mailAdd').addEventListener('click', () => openMailForm(null));
+  $('mailCancel').addEventListener('click', closeMailForm);
+  $('mailPreset').addEventListener('change', syncPresetUi);
+  $('mailEmail').addEventListener('change', () => {
+    // 按邮箱后缀自动选类型：填了 xxx@163.com 就切到 163
+    const domain = ($('mailEmail').value.split('@')[1] || '').toLowerCase();
+    const p = presets.find((x) => x.domains.includes(domain));
+    if (p && !editingMail) { $('mailPreset').value = p.id; syncPresetUi(); }
+  });
+  $('mailSave').addEventListener('click', async () => {
+    const btn = $('mailSave');
+    btn.disabled = true;
+    $('mailMsg').textContent = '正在连接邮箱服务器…';
+    const input = {
+      id: editingMail || undefined,
+      preset: $('mailPreset').value,
+      email: $('mailEmail').value.trim(),
+      host: $('mailHost').value.trim(),
+      port: Number($('mailPort').value),
+      label: $('mailLabel').value.trim()
+    };
+    const r = await api.mailSave(input, $('mailPass').value);
+    btn.disabled = false;
+    if (r.ok) {
+      $('mailMsg').textContent = '';
+      closeMailForm();
+      loadMail();
+    } else {
+      $('mailMsg').textContent = r.error || '保存失败';
+    }
+  });
+  $('mailList').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-op]');
+    if (!b) return;
+    const id = b.closest('.mail-row').dataset.id;
+    const acc = mail.accounts.find((a) => a.id === id);
+    if (!acc) return;
+    if (b.dataset.op === 'edit') openMailForm(acc);
+    else if (b.dataset.op === 'toggle') await api.mailToggle(id, !acc.enabled);
+    else if (b.dataset.op === 'retry') await api.mailRetry(id);
+    else if (b.dataset.op === 'remove') {
+      if (b.dataset.armed) { await api.mailRemove(id); }
+      else { b.dataset.armed = '1'; b.textContent = '确认删除'; setTimeout(() => { delete b.dataset.armed; b.textContent = '删除'; }, 3000); return; }
+    }
+    loadMail();
+  });
+
+  async function loadMail() {
+    mail = await api.mailAccounts();
+    renderMail();
+  }
+  if (api.mailPresets) {
+    api.mailPresets().then((p) => {
+      presets = p || [];
+      $('mailPreset').innerHTML = presets.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+      syncPresetUi();
+    });
+    loadMail();
+    api.onMailStatus((s) => { mail.status = s || {}; renderMail(); });
+    api.onConfig(() => loadMail());
+  }
+
   // 快捷键是否注册成功（可能被别的软件占用）
   let shortcuts = {};
   const KEY_TEXT = { busy: '被其他软件占用', invalid: '格式不对，例如 Control+Alt+V', off: '未设置' };

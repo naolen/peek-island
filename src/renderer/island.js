@@ -979,17 +979,48 @@
     b.classList.toggle('show', !!html);
   }
 
+  function fmtDate(t) {
+    if (!t) return '';
+    const d = new Date(t);
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  async function openMail(item) {
+    msg.reading = { item, data: null, error: '' };
+    renderMsgs();
+    const r = await api.mailBody(item.accountId, item.uid);
+    if (!msg.reading || msg.reading.item.key !== item.key) return;
+    if (r && r.error) msg.reading.error = r.error; else msg.reading.data = r;
+    renderMsgs();
+  }
+
+  function renderReader() {
+    const { item, data, error } = msg.reading;
+    const list = $('msgList');
+    const body = error ? `<div class="empty-hint">${esc(error)}</div>`
+      : !data ? '<div class="empty-hint">正在读取…</div>'
+      : `<div class="mail-text">${esc(data.text)}</div>${data.attachments.length ? `<div class="mail-att">附件（未下载）：${data.attachments.map(esc).join('、')}</div>` : ''}`;
+    list.innerHTML = `<div class="mail-reader">
+      <button type="button" class="link-btn" data-act="back">‹ 返回列表</button>
+      <div class="mail-subject">${esc((data && data.subject) || item.title)}</div>
+      <div class="mail-meta">${esc((data && data.from) || item.from || '')} · ${esc(fmtDate((data && data.date) || item.time))} · ${esc(item.account || '')}</div>
+      ${body}
+    </div>`;
+    fitPanel();
+  }
+
   function renderMsgs() {
     document.querySelectorAll('#msgKinds button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.kind === msg.kind)));
     renderBanner();
     const list = $('msgList');
     list.classList.add('scroll');
+    if (msg.reading) { renderReader(); return; }
     if (!msg.items.length) {
       list.innerHTML = `<div class="empty-hint">没有新消息<br>飞书、QQ、钉钉、企业微信、Outlook 等发出的通知${msg.kind === 'notify' ? '' : '和邮件'}会出现在这里</div>`;
     } else {
       list.innerHTML = msg.items.map((it) => {
         const av = avatarOf(it.app);
-        return `<div class="msg-row${it.read ? '' : ' unread'}" role="listitem" data-key="${esc(it.key)}">
+        return `<div class="msg-row${it.read ? '' : ' unread'}${it.kind === 'mail' ? ' is-mail' : ''}" role="listitem" data-key="${esc(it.key)}" ${it.kind === 'mail' ? 'data-act="open" tabindex="0" title="查看正文"' : ''}>
           <span class="avatar" style="background:${av.color}">${esc(av.text)}</span>
           <span class="msg-main">
             <span class="msg-top"><span>${esc(it.kind === 'mail' ? (it.account || '邮件') : it.app)}</span><span class="num">${ago(it.time)}</span></span>
@@ -1005,13 +1036,24 @@
 
   $('msgKinds').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-kind]');
-    if (b) { msg.kind = b.dataset.kind; loadMsgs(false); }
+    if (b) { msg.kind = b.dataset.kind; msg.reading = null; loadMsgs(false); }
   });
   $('msgReadAll').addEventListener('click', () => api.inboxReadAll().then(() => loadMsgs(false)));
   $('msgClear').addEventListener('click', () => api.inboxClear(msg.kind === 'all' ? null : msg.kind).then(() => loadMsgs(false)));
   $('msgList').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-act="remove"]');
-    if (b) api.inboxRemove(b.closest('.msg-row').dataset.key).then(() => loadMsgs(false));
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'back') { msg.reading = null; renderMsgs(); return; }
+    const row = b.closest('.msg-row');
+    if (!row) return;
+    if (b.dataset.act === 'remove') { e.stopPropagation(); api.inboxRemove(row.dataset.key).then(() => loadMsgs(false)); return; }
+    if (b.dataset.act === 'open') {
+      const it = msg.items.find((x) => x.key === row.dataset.key);
+      if (it) openMail(it);
+    }
+  });
+  $('msgList').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.matches('.msg-row.is-mail')) e.target.click();
   });
   $('notifyBanner').addEventListener('click', (e) => {
     if (e.target.closest('[data-act="open-notify"]')) api.openNotifySettings();

@@ -36,6 +36,8 @@ app.whenReady().then(async () => {
   await shot('12-panel-todo-history');
   await js(`document.querySelector('#pageTabs [data-page="msg"]').click()`);
   await shot('13-panel-msg');
+  await js(`document.querySelector('.msg-row.is-mail').click()`);
+  await shot('13b-panel-mail');
   await js(`document.getElementById('btnClose').click()`);
   await new Promise((r) => setTimeout(r, 700));
   await js(`window.peek.__mockNotify()`);

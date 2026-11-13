@@ -51,6 +51,15 @@ contextBridge.exposeInMainWorld('peek', {
   openNotifySettings: () => ipcRenderer.send('notify:open-settings'),
   onNotifyStatus: (cb) => on('notify:status', cb),
   onNotifyApps: (cb) => on('notify:apps', cb),
+  // 邮箱
+  mailPresets: () => ipcRenderer.invoke('mail:presets'),
+  mailAccounts: () => ipcRenderer.invoke('mail:accounts'),
+  mailSave: (acc, password) => ipcRenderer.invoke('mail:save', acc, password),
+  mailRemove: (id) => ipcRenderer.invoke('mail:remove', id),
+  mailToggle: (id, enabled) => ipcRenderer.invoke('mail:toggle', id, enabled),
+  mailRetry: (id) => ipcRenderer.invoke('mail:retry', id),
+  mailBody: (accountId, uid) => ipcRenderer.invoke('mail:body', accountId, uid),
+  onMailStatus: (cb) => on('mail:status', cb),
   // 焦点与快捷键
   setFocus: (on) => ipcRenderer.send('focus:set', on),
   onPageOpen: (cb) => on('page:open', cb),
