@@ -39,6 +39,18 @@ contextBridge.exposeInMainWorld('peek', {
   todoNote: (note) => ipcRenderer.invoke('todo:note', note),
   todoExport: (which) => ipcRenderer.invoke('todo:export', which),
   onTodoChanged: (cb) => on('todo:changed', cb),
+  // 消息（通知 / 邮件）
+  inboxList: (kind) => ipcRenderer.invoke('inbox:list', kind),
+  inboxReadAll: () => ipcRenderer.invoke('inbox:read-all'),
+  inboxRemove: (key) => ipcRenderer.invoke('inbox:remove', key),
+  inboxClear: (kind) => ipcRenderer.invoke('inbox:clear', kind),
+  onInboxNew: (cb) => on('inbox:new', cb),
+  onInboxChanged: (cb) => on('inbox:changed', cb),
+  notifyStatus: () => ipcRenderer.invoke('notify:status'),
+  notifyApps: () => ipcRenderer.invoke('notify:apps'),
+  openNotifySettings: () => ipcRenderer.send('notify:open-settings'),
+  onNotifyStatus: (cb) => on('notify:status', cb),
+  onNotifyApps: (cb) => on('notify:apps', cb),
   // 焦点与快捷键
   setFocus: (on) => ipcRenderer.send('focus:set', on),
   onPageOpen: (cb) => on('page:open', cb),

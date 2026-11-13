@@ -65,12 +65,13 @@
   // ---------- 形态 ----------
   function form() {
     if (st.open) return 'panel';
+    if (msg.alert) return 'alert';
     if (st.cfg.mode === 'pinned') return 'island';
     if (st.cfg.mode === 'auto' && st.hover) return 'island';
     return 'strip';
   }
 
-  function islandWidth() { return SIZES.island[0] + (musicActive() ? 76 : 0); }
+  function islandWidth() { return SIZES.island[0] + (musicActive() ? 76 : 0) + (msg.unread > 0 ? 48 : 0); }
 
   function applyForm() {
     const f = form();
@@ -78,6 +79,7 @@
     hot.classList.toggle('has-body', f !== 'strip');
     let w, h, r;
     if (f === 'panel') { w = 600; h = panel.offsetHeight; r = 30; }
+    else if (f === 'alert') { w = 420; h = 64; r = 32; }
     else if (f === 'island') { [, h, r] = SIZES.island; w = islandWidth(); }
     else [w, h, r] = SIZES[f];
     morph.style.width = w + 'px';
@@ -337,17 +339,18 @@
   }
 
   // ---------- 展开面板 ----------
-  const PAGES = ['stock', 'music', 'clip', 'todo'];
+  const PAGES = ['stock', 'music', 'clip', 'todo', 'msg'];
   const INPUT_PAGES = ['clip', 'todo'];
   function setPage(page) {
     if (!PAGES.includes(page)) page = 'stock';
     st.page = page;
     panel.dataset.page = page;
     document.querySelectorAll('#pageTabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.page === page)));
-    document.querySelector('.pages-thumb').style.left = (3 + PAGES.indexOf(page) * 74) + 'px';
+    document.querySelector('.pages-thumb').style.left = (3 + PAGES.indexOf(page) * 64) + 'px';
     if (page === 'music') renderMusic();
     if (page === 'clip') loadClips();
     if (page === 'todo') loadTodo();
+    if (page === 'msg') loadMsgs(true);
     syncFocus();
     if (st.cfg) renderFoot();
     fitPanel();
@@ -408,6 +411,7 @@
       : st.page === 'stock' ? `数据来自东方财富，可能有延迟 · ${boss}`
       : st.page === 'music' ? `支持所有接入系统媒体控制的播放器 · ${boss}`
       : st.page === 'clip' ? `${keyName(cfg.clipKey)} 随时唤出 · 点一条即复制，回车复制第一条 · Esc 收起`
+      : st.page === 'msg' ? '消息只保存在内存里，退出余光后清空'
       : `${keyName(cfg.todoKey)} 随时唤出 · 点文字可修改 · Esc 收起`;
   }
 
@@ -910,6 +914,116 @@
     }
   });
 
+  // ---------- 消息（系统通知 / 邮件） ----------
+  const msg = { unread: 0, items: [], kind: 'all', alert: null, alertTimer: null, status: null };
+  const AVATAR_COLORS = ['#3E63C9', '#2F8F7A', '#9B5BC9', '#C9773E', '#C94A6A', '#4A8FC9', '#7A8F2F'];
+  function avatarOf(name) {
+    let h = 0;
+    for (const ch of String(name || '?')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return { color: AVATAR_COLORS[h % AVATAR_COLORS.length], text: String(name || '?').trim().slice(0, 1).toUpperCase() };
+  }
+
+  function renderMsgIndicators() {
+    const has = msg.unread > 0;
+    const was = document.body.classList.contains('has-msg');
+    document.body.classList.toggle('has-msg', has);
+    const n = msg.unread > 99 ? '99+' : String(msg.unread);
+    $('msgCount').textContent = n;
+    $('tabMsgCount').textContent = n;
+    $('msgSeg').setAttribute('aria-label', `${msg.unread} 条新消息`);
+    if (was !== has) applyForm();
+  }
+
+  function showAlert(item) {
+    const av = avatarOf(item.app);
+    const a = $('alertAvatar');
+    a.style.background = av.color;
+    a.textContent = av.text;
+    $('alertApp').textContent = item.kind === 'mail' ? (item.account || '邮件') : item.app;
+    $('alertTime').textContent = ago(item.time);
+    $('alertTitle').textContent = item.title;
+    $('alertBody').textContent = (item.body || '').replace(/\s+/g, ' ');
+    msg.alert = item;
+    applyForm();
+    armAlertTimer();
+  }
+  function armAlertTimer() {
+    clearTimeout(msg.alertTimer);
+    msg.alertTimer = setTimeout(() => {
+      // 鼠标停在卡片上时先不收
+      if (st.inside && form() === 'alert') { armAlertTimer(); return; }
+      msg.alert = null;
+      applyForm();
+    }, 5000);
+  }
+
+  let msgSeq = 0;
+  async function loadMsgs(markRead) {
+    if (!api.inboxList) return;
+    const seq = ++msgSeq;
+    const r = await api.inboxList(msg.kind);
+    if (seq !== msgSeq) return;
+    msg.items = r.items || [];
+    renderMsgs();
+    if (markRead && r.unread) api.inboxReadAll();
+  }
+
+  function renderBanner() {
+    const b = $('notifyBanner');
+    const s = msg.status && msg.status.status;
+    let html = '';
+    if (st.cfg.notify === false) html = '系统通知提醒已关闭，可以在设置里打开';
+    else if (s === 'denied' || s === 'unspecified') html = '需要允许余光读取通知，飞书、QQ 等的消息才能显示在这里<button type="button" class="link-btn" data-act="open-notify">打开系统设置</button>';
+    else if (s === 'unsupported') html = '当前系统不支持读取通知（需要 Windows 10 1809 及以上）';
+    b.innerHTML = html;
+    b.classList.toggle('show', !!html);
+  }
+
+  function renderMsgs() {
+    document.querySelectorAll('#msgKinds button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.kind === msg.kind)));
+    renderBanner();
+    const list = $('msgList');
+    list.classList.add('scroll');
+    if (!msg.items.length) {
+      list.innerHTML = `<div class="empty-hint">没有新消息<br>飞书、QQ、钉钉、企业微信、Outlook 等发出的通知${msg.kind === 'notify' ? '' : '和邮件'}会出现在这里</div>`;
+    } else {
+      list.innerHTML = msg.items.map((it) => {
+        const av = avatarOf(it.app);
+        return `<div class="msg-row${it.read ? '' : ' unread'}" role="listitem" data-key="${esc(it.key)}">
+          <span class="avatar" style="background:${av.color}">${esc(av.text)}</span>
+          <span class="msg-main">
+            <span class="msg-top"><span>${esc(it.kind === 'mail' ? (it.account || '邮件') : it.app)}</span><span class="num">${ago(it.time)}</span></span>
+            <span class="msg-title">${esc(it.title)}</span>
+            ${it.body ? `<span class="msg-body">${esc(it.body)}</span>` : ''}
+          </span>
+          <button type="button" class="op-btn danger" data-act="remove" aria-label="删除">${XMARK}</button>
+        </div>`;
+      }).join('');
+    }
+    fitPanel();
+  }
+
+  $('msgKinds').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-kind]');
+    if (b) { msg.kind = b.dataset.kind; loadMsgs(false); }
+  });
+  $('msgReadAll').addEventListener('click', () => api.inboxReadAll().then(() => loadMsgs(false)));
+  $('msgClear').addEventListener('click', () => api.inboxClear(msg.kind === 'all' ? null : msg.kind).then(() => loadMsgs(false)));
+  $('msgList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act="remove"]');
+    if (b) api.inboxRemove(b.closest('.msg-row').dataset.key).then(() => loadMsgs(false));
+  });
+  $('notifyBanner').addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="open-notify"]')) api.openNotifySettings();
+  });
+  $('msgZone').addEventListener('click', () => openPanel(undefined, 'msg'));
+  $('msgSeg').addEventListener('click', () => openPanel(undefined, 'msg'));
+  $('alertBtn').addEventListener('click', () => {
+    clearTimeout(msg.alertTimer);
+    msg.alert = null;
+    openPanel(undefined, 'msg');
+  });
+
   // ---------- 数据 ----------
   function applyAppearance() {
     const c = st.cfg;
@@ -965,6 +1079,24 @@
         }, 120);
       });
       api.onClipChanged(() => { if (st.open && st.page === 'clip') loadClips(); });
+      if (api.inboxList) {
+        const r = await api.inboxList('all');
+        msg.unread = r.unread || 0;
+        renderMsgIndicators();
+        msg.status = await api.notifyStatus();
+        api.onNotifyStatus((s) => { msg.status = s; if (st.open && st.page === 'msg') renderBanner(); });
+        api.onInboxNew(({ item, unread, popup }) => {
+          msg.unread = unread;
+          renderMsgIndicators();
+          if (st.open && st.page === 'msg') { loadMsgs(true); return; }
+          if (popup && !st.open) showAlert(item);
+        });
+        api.onInboxChanged(({ unread }) => {
+          msg.unread = unread;
+          renderMsgIndicators();
+          if (st.open && st.page === 'msg') loadMsgs(false);
+        });
+      }
       api.onTodoChanged(() => { if (st.open && st.page === 'todo') loadTodo(); });
     }
     if (api.getMedia) {

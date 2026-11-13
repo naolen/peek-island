@@ -7,6 +7,7 @@ const { NativeHelper } = require('./native');
 const { ClipStore } = require('./clipstore');
 const { ClipWatcher } = require('./clipwatch');
 const { TodoStore, dayKey, dayLabel } = require('./todostore');
+const { Inbox, isAllowed } = require('./inbox');
 const fs = require('fs');
 
 // 岛窗口的尺寸要能装下最大的展开面板；没有内容的透明区域会把点击穿透给下面的软件
@@ -28,6 +29,8 @@ let clipWatcher = null;
 let todos = null;
 let todayKey = null;
 const thumbCache = new Map(); // 剪贴板图片缩略图：id -> data URL
+const inbox = new Inbox(60);
+let notifyStatus = { status: 'unknown', message: '' };
 // 当前媒体状态；封面只在换歌时由小助手发送，这里缓存起来
 let media = { active: false, available: false };
 
@@ -183,6 +186,7 @@ function applyConfig(patch) {
   broadcast('config', cfg);
   if (['bossKey', 'clipKey', 'todoKey'].some((k) => before[k] !== cfg[k])) registerShortcuts();
   if (clips && before.clipLimit !== cfg.clipLimit) { clips.setLimit(cfg.clipLimit); broadcast('clip:changed'); }
+  if (native && before.notify !== cfg.notify) native.send({ cmd: 'notify', on: cfg.notify });
   buildTray();
   if (JSON.stringify(before.groups) !== JSON.stringify(cfg.groups) || before.refreshMs !== cfg.refreshMs) poll();
   return cfg;
@@ -221,6 +225,26 @@ function setupNative() {
   native.on('ready', () => {
     media.available = true;
     broadcast('media', media);
+    // 小助手（重新）启动后，按配置开启通知读取
+    native.send({ cmd: 'notify', on: store.get().notify });
+  });
+  native.on('notify-status', (s) => {
+    notifyStatus = { status: s.status, message: s.message || '' };
+    broadcast('notify:status', notifyStatus);
+  });
+  native.on('notification', (n) => {
+    const app = n.app || '未知应用';
+    if (inbox.seeApp(app)) {
+      const known = store.get().notifyKnownApps;
+      if (!known.includes(app)) store.set({ notifyKnownApps: known.concat([app]) });
+      broadcast('notify:apps', inbox.appList());
+    }
+    const cfg = store.get();
+    if (!cfg.notify || !isAllowed(app, cfg)) return;
+    // 只有标题、没有正文的通知（比如“正在后台运行”），一般没意义，跳过
+    if (!n.title && !n.body) return;
+    const item = inbox.add({ kind: 'notify', id: n.id, app, title: n.title || app, body: n.body || '', time: n.time || Date.now() });
+    if (item) broadcast('inbox:new', { item, unread: inbox.unread(), popup: cfg.notifyPopup });
   });
   native.on('unavailable', (reason) => {
     media = { active: false, available: false, reason };
@@ -320,6 +344,22 @@ function setupTodos() {
   });
 }
 
+// ---------- 消息（通知 / 邮件） ----------
+function setupInbox() {
+  ipcMain.handle('inbox:list', (_e, kind) => ({ items: inbox.list(kind), unread: inbox.unread() }));
+  ipcMain.handle('inbox:read-all', () => { inbox.markAllRead(); broadcast('inbox:changed', { unread: 0 }); return true; });
+  ipcMain.handle('inbox:remove', (_e, key) => { inbox.remove(key); broadcast('inbox:changed', { unread: inbox.unread() }); return true; });
+  ipcMain.handle('inbox:clear', (_e, kind) => { inbox.clear(kind); broadcast('inbox:changed', { unread: inbox.unread() }); return true; });
+  ipcMain.handle('notify:status', () => notifyStatus);
+  ipcMain.handle('notify:apps', () => {
+    // 合并：这次运行见过的 + 以前见过的（配置里记着）
+    const seen = new Map(inbox.appList().map((a) => [a.name, a]));
+    for (const name of store.get().notifyKnownApps) if (!seen.has(name)) seen.set(name, { name, count: 0, last: 0 });
+    return Array.from(seen.values());
+  });
+  ipcMain.on('notify:open-settings', () => shell.openExternal('ms-settings:privacy-notifications'));
+}
+
 function setupIpc() {
   ipcMain.handle('config:get', () => store.get());
   ipcMain.handle('config:set', (_e, patch) => applyConfig(patch || {}));
@@ -356,6 +396,7 @@ app.whenReady().then(() => {
   setupIpc();
   setupClips();
   setupTodos();
+  setupInbox();
   createIsland();
   buildTray();
   registerShortcuts();

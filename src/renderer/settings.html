@@ -57,6 +57,23 @@
     </section>
 
     <section class="card">
+      <div class="card-title">系统通知 <span id="notifyStatus" class="hint"></span></div>
+      <div class="grid">
+        <label class="field">读取系统通知
+          <select id="notify" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </label>
+        <label class="field">来通知时
+          <select id="notifyPopup" class="input"><option value="1">岛上弹出卡片</option><option value="0">只亮提示，不弹出</option></select>
+        </label>
+        <label class="field">提醒哪些应用
+          <select id="notifyAll" class="input"><option value="0">常用办公应用 + 下面勾选的</option><option value="1">所有应用（下面可取消）</option></select>
+        </label>
+      </div>
+      <div class="hint">默认提醒：飞书、QQ、钉钉、企业微信、Outlook、Teams 和邮件类应用。下面列出最近发过通知的应用：</div>
+      <div id="notifyApps" class="app-list"></div>
+    </section>
+
+    <section class="card">
       <div class="card-title">剪贴板与待办</div>
       <div class="grid">
         <label class="field">记录剪贴板

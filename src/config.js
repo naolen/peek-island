@@ -23,6 +23,15 @@ const DEFAULTS = {
   clipImages: true,
   clipLimit: 200,
   clipKey: 'Control+Alt+V',
+  // 系统通知：notify 总开关；notifyPopup 来通知时岛自动弹出卡片
+  notify: true,
+  notifyPopup: true,
+  // true = 所有应用都提醒；false = 预设（飞书、QQ、钉钉、企业微信、Outlook、Teams、邮件）+ 手动勾选
+  notifyAll: false,
+  notifyAllowed: [],
+  notifyMuted: [],
+  // 见过的发通知的应用，设置里列出来让用户勾选
+  notifyKnownApps: [],
   // 待办：没做完的事第二天自动顺延
   todoRollover: true,
   todoKey: 'Control+Alt+T',
@@ -55,6 +64,12 @@ function sanitize(cfg) {
   out.clipImages = out.clipImages !== false;
   out.clipLimit = clampInt(out.clipLimit, 20, 2000, DEFAULTS.clipLimit);
   out.todoRollover = out.todoRollover !== false;
+  out.notify = out.notify !== false;
+  out.notifyPopup = out.notifyPopup !== false;
+  out.notifyAll = out.notifyAll === true;
+  for (const k of ['notifyAllowed', 'notifyMuted', 'notifyKnownApps']) {
+    out[k] = Array.from(new Set((Array.isArray(out[k]) ? out[k] : []).filter((x) => typeof x === 'string' && x).map((x) => x.slice(0, 60)))).slice(0, 100);
+  }
   for (const k of ['clipKey', 'todoKey']) {
     if (typeof out[k] !== 'string') out[k] = DEFAULTS[k];
     out[k] = out[k].trim().slice(0, 40);

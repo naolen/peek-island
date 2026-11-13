@@ -5,6 +5,35 @@ const os = require('os');
 const path = require('path');
 const { ClipStore } = require('../src/clipstore');
 const { TodoStore, dayLabel } = require('../src/todostore');
+const { Inbox, isAllowed } = require('../src/inbox');
+
+test('isAllowed：预设应用、手动勾选与取消', () => {
+  const cfg = { notifyAll: false, notifyAllowed: ['记事本'], notifyMuted: ['QQ'] };
+  assert.strictEqual(isAllowed('飞书', cfg), true);
+  assert.strictEqual(isAllowed('Feishu', cfg), true);
+  assert.strictEqual(isAllowed('QQ', cfg), false); // 预设但被取消
+  assert.strictEqual(isAllowed('记事本', cfg), true); // 手动勾选
+  assert.strictEqual(isAllowed('Steam', cfg), false);
+  assert.strictEqual(isAllowed('Steam', { notifyAll: true, notifyMuted: [] }), true);
+  assert.strictEqual(isAllowed('', cfg), false);
+});
+
+test('Inbox：去重、按时间排序、上限、未读', () => {
+  const box = new Inbox(3);
+  assert.ok(box.add({ kind: 'notify', id: 1, time: 10, title: 'a' }));
+  assert.strictEqual(box.add({ kind: 'notify', id: 1, time: 10, title: 'a' }), null);
+  box.add({ kind: 'mail', id: 1, time: 30, title: 'm' });
+  box.add({ kind: 'notify', id: 2, time: 20, title: 'b' });
+  box.add({ kind: 'notify', id: 3, time: 40, title: 'c' });
+  assert.deepStrictEqual(box.items.map((x) => x.title), ['c', 'm', 'b']);
+  assert.strictEqual(box.unread(), 3);
+  assert.strictEqual(box.list('mail').length, 1);
+  box.markAllRead();
+  assert.strictEqual(box.unread(), 0);
+  assert.ok(box.seeApp('飞书'));
+  assert.ok(!box.seeApp('飞书'));
+  assert.strictEqual(box.appList()[0].count, 2);
+});
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'peek-'));
 

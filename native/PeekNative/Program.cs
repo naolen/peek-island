@@ -7,6 +7,7 @@
 //   stdin 每行一条 JSON 命令：
 //     {"cmd":"toggle"} / {"cmd":"play"} / {"cmd":"pause"} / {"cmd":"next"} / {"cmd":"prev"}
 //     {"cmd":"level","on":true}    打开 / 关闭峰值推送（没放歌时关掉，省电）
+//     {"cmd":"notify","on":true}   开始 / 停止读取系统通知（见 NotificationWatcher）
 // stdin 关闭（主程序退出）时自动退出。
 using System.Text;
 using System.Text.Json;
@@ -41,6 +42,8 @@ internal static class Program
         try { await media.StartAsync(); }
         catch (Exception e) { Send(new { type = "error", message = "media: " + e.Message }); }
 
+        var notifications = new NotificationWatcher(Send);
+
         var cts = new CancellationTokenSource();
         _ = Task.Run(() => LevelLoop(cts.Token));
 
@@ -56,6 +59,12 @@ internal static class Program
                 if (cmd == "level")
                 {
                     _levelOn = root.TryGetProperty("on", out var on) && on.GetBoolean();
+                    continue;
+                }
+                if (cmd == "notify")
+                {
+                    bool enable = root.TryGetProperty("on", out var on) && on.GetBoolean();
+                    if (enable) await notifications.StartAsync(); else notifications.Stop();
                     continue;
                 }
                 if (cmd != null) await media.CommandAsync(cmd);

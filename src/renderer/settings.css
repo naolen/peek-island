@@ -61,3 +61,8 @@ button, input, select { font-family: inherit; font-size: 13px; color: inherit; }
 input[type="range"] { width: 100%; accent-color: #5B8CFF; height: 34px; }
 .card-title .hint { font-weight: 400; margin-left: 8px; }
 .key-status { color: #FFC26B; }
+.app-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-chip { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 17px; background: #15171C; border: 1px solid #2E323A; cursor: pointer; font-size: 13px; }
+.app-chip input { accent-color: #5B8CFF; }
+.app-chip .preset { font-size: 11px; color: #8E949C; }
+.hint .link { color: #8AB4FF; cursor: pointer; text-decoration: underline; }

@@ -34,6 +34,12 @@ app.whenReady().then(async () => {
   await shot('11-panel-todo');
   await js(`document.getElementById('todoHistory').click()`);
   await shot('12-panel-todo-history');
+  await js(`document.querySelector('#pageTabs [data-page="msg"]').click()`);
+  await shot('13-panel-msg');
+  await js(`document.getElementById('btnClose').click()`);
+  await new Promise((r) => setTimeout(r, 700));
+  await js(`window.peek.__mockNotify()`);
+  await shot('14-alert');
   const errs = await js('window.__errs || []');
   console.log('done', errs);
   app.quit();

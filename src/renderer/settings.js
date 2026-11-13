@@ -80,6 +80,7 @@
     if (document.activeElement !== $('clipKey')) $('clipKey').value = cfg.clipKey;
     if (document.activeElement !== $('todoKey')) $('todoKey').value = cfg.todoKey;
     renderShortcutStatus();
+    renderNotify();
     $('opacity').value = cfg.opacity; $('opacityVal').textContent = Math.round(cfg.opacity * 100) + '%';
     $('scale').value = cfg.scale; $('scaleVal').textContent = Math.round(cfg.scale * 100) + '%';
     $('topOffset').value = cfg.topOffset; $('topVal').textContent = cfg.topOffset ? cfg.topOffset + 'px' : '贴边';
@@ -211,6 +212,50 @@
   $('clipLimit').addEventListener('change', () => save({ clipLimit: Number($('clipLimit').value) }));
   $('clipKey').addEventListener('change', () => save({ clipKey: $('clipKey').value.trim() }));
   $('todoKey').addEventListener('change', () => save({ todoKey: $('todoKey').value.trim() }));
+
+  // ---------- 系统通知 ----------
+  const PRESET = /飞书|feishu|lark|qq|钉钉|dingtalk|企业微信|wecom|wxwork|outlook|teams|邮件|mail|foxmail|网易邮箱/i;
+  let notifyApps = [];
+  let notifyStatus = null;
+  function allowed(app) {
+    if (cfg.notifyAll) return !cfg.notifyMuted.includes(app);
+    if (cfg.notifyAllowed.includes(app)) return true;
+    return PRESET.test(app) && !cfg.notifyMuted.includes(app);
+  }
+  function renderNotify() {
+    if (!cfg) return;
+    $('notify').value = cfg.notify ? '1' : '0';
+    $('notifyPopup').value = cfg.notifyPopup ? '1' : '0';
+    $('notifyAll').value = cfg.notifyAll ? '1' : '0';
+    const s = notifyStatus && notifyStatus.status;
+    const el = $('notifyStatus');
+    el.innerHTML = !cfg.notify ? '' : s === 'allowed' ? '· 已获得读取权限'
+      : s === 'denied' || s === 'unspecified' ? '· 还没有读取权限，<span class="link" id="openNotify">打开系统设置</span>'
+      : s === 'unsupported' ? '· 当前系统不支持（需要 Windows 10 1809 及以上）' : '';
+    const box = $('notifyApps');
+    box.innerHTML = notifyApps.length
+      ? notifyApps.map((a) => `<label class="app-chip"><input type="checkbox" data-app="${esc(a.name)}" ${allowed(a.name) ? 'checked' : ''}>${esc(a.name)}${PRESET.test(a.name) ? '<span class="preset">常用</span>' : ''}</label>`).join('')
+      : '<span class="hint">还没有收到过通知</span>';
+  }
+  $('notify').addEventListener('change', () => save({ notify: $('notify').value === '1' }));
+  $('notifyPopup').addEventListener('change', () => save({ notifyPopup: $('notifyPopup').value === '1' }));
+  $('notifyAll').addEventListener('change', () => save({ notifyAll: $('notifyAll').value === '1' }));
+  $('notifyApps').addEventListener('change', (e) => {
+    const app = e.target.dataset.app;
+    if (!app) return;
+    const on = e.target.checked;
+    const allowedList = cfg.notifyAllowed.filter((x) => x !== app);
+    const muted = cfg.notifyMuted.filter((x) => x !== app);
+    if (on) allowedList.push(app); else muted.push(app);
+    save({ notifyAllowed: allowedList, notifyMuted: muted });
+  });
+  $('notifyStatus').addEventListener('click', (e) => { if (e.target.id === 'openNotify') api.openNotifySettings(); });
+  if (api.notifyApps) {
+    api.notifyApps().then((a) => { notifyApps = a || []; renderNotify(); });
+    api.notifyStatus().then((s) => { notifyStatus = s; renderNotify(); });
+    api.onNotifyApps(() => api.notifyApps().then((a) => { notifyApps = a || []; renderNotify(); }));
+    api.onNotifyStatus((s) => { notifyStatus = s; renderNotify(); });
+  }
 
   // 快捷键是否注册成功（可能被别的软件占用）
   let shortcuts = {};

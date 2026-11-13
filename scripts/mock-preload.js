@@ -27,7 +27,13 @@ todos.add(today, '把分时图的均价线再调一下');
 todos.toggle(today, t1.id);
 todos.setNote(today, '今天先把剪贴板和待办做完，明天接东方财富。');
 const clipView = (it) => Object.assign({}, it, { thumb: '', length: (it.text || '').length });
-const listeners = { clip: [], todo: [], page: [] };
+const listeners = { clip: [], todo: [], page: [], inbox: [], inboxChanged: [] };
+const { Inbox } = require('../src/inbox');
+const inbox = new Inbox(60);
+inbox.add({ kind: 'notify', id: 1, app: '飞书', title: '王经理', body: '下午的评审改到 4 点，记得带上数据', time: now - 6 * 60e3 });
+inbox.add({ kind: 'notify', id: 2, app: 'QQ', title: '产品群', body: '@你 需求文档 v3 已更新，请过目', time: now - 25 * 60e3 });
+inbox.add({ kind: 'mail', id: 3, app: 'QQ 邮箱', account: 'QQ 邮箱', title: '本周数据周报', body: '附件为本周各渠道数据汇总，请查收。', time: now - 2 * 3600e3 });
+inbox.items[2].read = true;
 const fire = (k) => listeners[k].forEach((f) => f());
 const { sanitize } = require('../src/config');
 const cfg = sanitize({
@@ -70,6 +76,21 @@ contextBridge.exposeInMainWorld('peek', {
   todoNote: async (n) => todos.setNote(today, n),
   todoExport: async () => null,
   onTodoChanged: (cb) => listeners.todo.push(cb),
+  inboxList: async (kind) => ({ items: inbox.list(kind), unread: inbox.unread() }),
+  inboxReadAll: async () => { inbox.markAllRead(); listeners.inboxChanged.forEach((f) => f({ unread: 0 })); return true; },
+  inboxRemove: async (k) => { inbox.remove(k); listeners.inboxChanged.forEach((f) => f({ unread: inbox.unread() })); return true; },
+  inboxClear: async (kind) => { inbox.clear(kind); listeners.inboxChanged.forEach((f) => f({ unread: inbox.unread() })); return true; },
+  onInboxNew: (cb) => listeners.inbox.push(cb),
+  onInboxChanged: (cb) => listeners.inboxChanged.push(cb),
+  notifyStatus: async () => ({ status: 'denied' }),
+  notifyApps: async () => [{ name: '飞书' }, { name: 'QQ' }, { name: 'Steam' }],
+  openNotifySettings: () => {},
+  onNotifyStatus: () => {},
+  onNotifyApps: () => {},
+  __mockNotify: () => {
+    const item = inbox.add({ kind: 'notify', id: Date.now(), app: '飞书', title: '张总', body: '方案我看过了，挺好，下班前发我终版', time: Date.now() });
+    listeners.inbox.forEach((f) => f({ item, unread: inbox.unread(), popup: true }));
+  },
   setFocus: () => {},
   onPageOpen: (cb) => { window.__openPage = cb; },
   getShortcuts: async () => ({}),
