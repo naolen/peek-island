@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>余光</title>
+<link rel="stylesheet" href="island.css">
+</head>
+<body>
+<!-- 一个会变形的元素：光带 ⇄ 岛 ⇄ 展开 -->
+<div id="hot" class="interactive">
+  <div class="ear ear-l" aria-hidden="true"></div>
+  <div class="ear ear-r" aria-hidden="true"></div>
+
+  <div id="morph" data-form="strip">
+
+    <!-- 形态一：光带 -->
+    <div id="strip" class="layer">
+      <div id="segs"></div>
+    </div>
+
+    <!-- 形态二：岛 -->
+    <div id="island" class="layer">
+      <button id="tickerZone" class="zone" type="button" aria-label="展开行情">
+        <span id="tickDot" class="dot"></span>
+        <span class="ticker-window"><span id="ticker"></span></span>
+        <span id="islandGroup" class="group-tag"></span>
+      </button>
+    </div>
+
+    <!-- 形态三：展开面板 -->
+    <div id="panel" class="layer" role="dialog" aria-label="行情">
+      <div class="panel-head">
+        <div id="groupTabs" class="tabs" role="tablist" aria-label="分组"></div>
+        <div id="modeSeg" class="seg" role="radiogroup" aria-label="平时显示为">
+          <span class="seg-thumb" aria-hidden="true"></span>
+          <button type="button" role="radio" data-mode="strip" title="平时只有一条细光，最隐蔽">光带</button>
+          <button type="button" role="radio" data-mode="auto" title="平时是光带，鼠标靠近时变成岛">自动</button>
+          <button type="button" role="radio" data-mode="pinned" title="一直显示为岛">常驻</button>
+        </div>
+        <button id="btnSettings" class="icon-btn" type="button" aria-label="分组与设置">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        </button>
+        <button id="btnClose" class="icon-btn" type="button" aria-label="收起">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+        </button>
+      </div>
+
+      <div id="panelBody" class="fade">
+        <div class="info">
+          <div class="info-name">
+            <span id="curName"></span>
+            <span id="curSub" class="num sub"></span>
+          </div>
+          <span id="curPrice" class="num big"></span>
+          <span id="curPct" class="num pill"></span>
+        </div>
+
+        <div id="chart" class="chart">
+          <svg id="chartSvg" width="564" height="190" viewBox="0 0 564 190" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <span id="axHi" class="num ax ax-tl"></span>
+          <span id="axMid" class="num ax ax-ml"></span>
+          <span id="axLo" class="num ax ax-bl"></span>
+          <span id="axHiP" class="num ax ax-tr"></span>
+          <span id="axLoP" class="num ax ax-br"></span>
+          <span class="ax ax-mr avg-legend"><i></i>均价</span>
+          <span id="crossLine" class="cross-line" aria-hidden="true"></span>
+          <span id="crossDot" class="cross-dot" aria-hidden="true"></span>
+          <div id="chartEmpty" class="chart-empty">加载中…</div>
+          <div id="chartHit" class="chart-hit"></div>
+        </div>
+        <svg id="volSvg" width="564" height="36" viewBox="0 0 564 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div id="timeAxis" class="num time-axis"></div>
+
+        <div id="chips" class="chips"></div>
+      </div>
+      <div id="foot" class="foot"></div>
+    </div>
+  </div>
+
+  <!-- 悬停气泡（光带上的某一段 / 岛上的行情） -->
+  <div id="bubble" class="bubble glass" aria-hidden="true">
+    <div class="bubble-row">
+      <span id="bName"></span>
+      <span id="bPrice" class="num muted"></span>
+      <span id="bPct" class="num strong"></span>
+    </div>
+    <svg id="bMini" width="170" height="34" viewBox="0 0 170 34" aria-hidden="true"></svg>
+  </div>
+</div>
+<script src="island.js"></script>
+</body>
+</html>

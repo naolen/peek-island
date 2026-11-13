@@ -1,0 +1,60 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #15171C; color: #F2F2F4; font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif; font-size: 13px; }
+button, input, select { font-family: inherit; font-size: 13px; color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; left: -9999px; }
+
+.app { display: flex; height: 100%; }
+.side { width: 240px; flex-shrink: 0; border-right: 1px solid #23262D; padding: 18px 12px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.side-title { font-size: 12px; color: #9AA0A8; padding: 0 8px 8px; display: flex; justify-content: space-between; }
+.hint { font-size: 12px; color: #8E949C; }
+.group-list { display: flex; flex-direction: column; gap: 4px; }
+.group-item { height: 42px; border: none; border-radius: 10px; padding: 0 12px; background: transparent; text-align: left; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.group-item:hover { background: #1F2228; }
+.group-item[aria-selected="true"] { background: #2A2E36; }
+.group-item .cnt { margin-left: auto; color: #9AA0A8; font-size: 12px; }
+.btn-dashed { height: 40px; border: 1px dashed #3A3E46; background: transparent; border-radius: 10px; color: #C9CDD4; cursor: pointer; margin-top: 6px; }
+.btn-dashed:hover { background: #1F2228; }
+
+.main { flex: 1; min-width: 0; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.card { flex-shrink: 0; background: #1B1E24; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.card.grow { flex: 1 0 auto; min-height: 260px; }
+.card-title { font-size: 14px; font-weight: 600; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.spacer { flex: 1; }
+.label { color: #9AA0A8; font-size: 12px; }
+.input { height: 34px; border-radius: 8px; border: 1px solid #2E323A; background: #15171C; padding: 0 10px; outline: none; }
+.input:focus { border-color: #5B8CFF; }
+.input.wide { width: 380px; }
+.btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #2E323A; background: transparent; cursor: pointer; }
+.btn:hover { background: #23262D; }
+.btn.danger { color: #FF8A8A; border-color: #3A2A2C; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.search { position: relative; }
+.results { position: absolute; right: 0; top: 40px; width: 380px; max-height: 320px; overflow-y: auto; background: #20242B; border: 1px solid #2E323A; border-radius: 10px; box-shadow: 0 16px 40px rgba(0,0,0,.4); display: none; z-index: 5; padding: 4px; }
+.results.show { display: block; }
+.result { width: 100%; border: none; background: transparent; height: 40px; border-radius: 8px; display: flex; align-items: center; gap: 10px; padding: 0 10px; cursor: pointer; text-align: left; }
+.result:hover, .result.active { background: #2A2E36; }
+.result .code { color: #9AA0A8; font-size: 12px; }
+.result .type { margin-left: auto; font-size: 11px; color: #8E949C; }
+.result.added { opacity: .45; cursor: default; }
+.results .empty { padding: 12px; color: #8E949C; }
+
+.table-head, .stock-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 110px 100px 140px; gap: 12px; align-items: center; padding: 0 12px; }
+.table-head { font-size: 12px; color: #9AA0A8; }
+.r { text-align: right; }
+.stock-list { display: flex; flex-direction: column; gap: 6px; }
+.stock-row { height: 46px; border-radius: 10px; background: #15171C; }
+.stock-row .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-row .code { color: #9AA0A8; font-size: 12px; }
+.stock-row .ops { display: flex; gap: 4px; justify-content: flex-end; }
+.mini-btn { height: 28px; min-width: 28px; padding: 0 8px; border: none; border-radius: 6px; background: transparent; color: #C9CDD4; cursor: pointer; }
+.mini-btn:hover { background: #262A31; }
+.mini-btn.danger { color: #FF8A8A; }
+.mini-btn:disabled { opacity: .3; cursor: default; }
+.empty-list { padding: 28px; text-align: center; color: #8E949C; }
+
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; color: #9AA0A8; font-size: 12px; }
+.field .input { color: #F2F2F4; }

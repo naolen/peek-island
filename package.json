@@ -1,0 +1,46 @@
+{
+  "name": "peek-island",
+  "version": "0.1.0",
+  "description": "余光：贴在 Windows 屏幕顶部的光带 / 灵动岛式盯盘工具",
+  "main": "src/main.js",
+  "author": "naolen",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --win nsis --x64",
+    "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.naolen.peekisland",
+    "productName": "余光",
+    "artifactName": "peek-island-setup-${version}.${ext}",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "余光"
+    }
+  }
+}
