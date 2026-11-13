@@ -20,6 +20,11 @@ app.whenReady().then(async () => {
   await shot('5-panel');
   await js(`(() => { const h = document.getElementById('chartHit'); const r = h.getBoundingClientRect(); h.dispatchEvent(new MouseEvent('mousemove', { clientX: r.left + r.width * 0.3, clientY: r.top + 50, bubbles: true })); })()`);
   await shot('6-panel-cross');
+  await js(`document.getElementById('chartHit').dispatchEvent(new MouseEvent('mouseleave')); document.querySelector('#pageTabs [data-page="music"]').click()`);
+  await shot('7-panel-music');
+  await js(`document.getElementById('btnClose').click()`);
+  await js(`document.getElementById('musicZone').dispatchEvent(new MouseEvent('mouseenter'))`);
+  await shot('8-island-music');
   const errs = await js('window.__errs || []');
   console.log('done', errs);
   app.quit();

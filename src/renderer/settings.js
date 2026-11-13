@@ -72,6 +72,7 @@
     if (document.activeElement !== $('collapse')) $('collapse').value = cfg.collapseDelayMs / 1000;
     if (document.activeElement !== $('bossKey')) $('bossKey').value = cfg.bossKey;
     $('style').value = cfg.style;
+    $('music').value = cfg.music ? '1' : '0';
     $('opacity').value = cfg.opacity; $('opacityVal').textContent = Math.round(cfg.opacity * 100) + '%';
     $('scale').value = cfg.scale; $('scaleVal').textContent = Math.round(cfg.scale * 100) + '%';
     $('topOffset').value = cfg.topOffset; $('topVal').textContent = cfg.topOffset ? cfg.topOffset + 'px' : '贴边';
@@ -196,6 +197,7 @@
   $('collapse').addEventListener('change', () => save({ collapseDelayMs: Math.round(Number($('collapse').value) * 1000) }));
   $('bossKey').addEventListener('change', () => save({ bossKey: $('bossKey').value.trim() }));
   $('style').addEventListener('change', () => save({ style: $('style').value }));
+  $('music').addEventListener('change', () => save({ music: $('music').value === '1' }));
   // 拖动滑块时实时生效
   [['opacity', 'opacity'], ['scale', 'scale'], ['topOffset', 'topOffset']].forEach(([id, key]) => {
     $(id).addEventListener('input', () => save({ [key]: Number($(id).value) }));

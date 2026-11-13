@@ -17,6 +17,7 @@
     <!-- 形态一：光带 -->
     <div id="strip" class="layer">
       <div id="segs"></div>
+      <button id="musicSeg" class="seg-item music-seg" type="button" aria-label="正在播放"><span class="light"></span></button>
     </div>
 
     <!-- 形态二：岛 -->
@@ -26,12 +27,21 @@
         <span class="ticker-window"><span id="ticker"></span></span>
         <span id="islandGroup" class="group-tag"></span>
       </button>
+      <button id="musicZone" class="zone" type="button" aria-label="正在播放，点击展开">
+        <span id="mzThumb" class="mz-thumb"></span>
+        <span id="mzEq" class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </button>
     </div>
 
     <!-- 形态三：展开面板 -->
-    <div id="panel" class="layer" role="dialog" aria-label="行情">
+    <div id="panel" class="layer" role="dialog" aria-label="行情" data-page="stock">
       <div class="panel-head">
-        <div id="groupTabs" class="tabs" role="tablist" aria-label="分组"></div>
+        <div id="pageTabs" class="pages" role="tablist" aria-label="页面">
+          <span class="pages-thumb" aria-hidden="true"></span>
+          <button type="button" role="tab" data-page="stock"><i class="pdot" style="background:#FF8A7A"></i>行情</button>
+          <button type="button" role="tab" data-page="music"><i class="pdot" style="background:#A98BFF"></i>音乐</button>
+        </div>
+        <div class="spacer"></div>
         <div id="modeSeg" class="seg" role="radiogroup" aria-label="平时显示为">
           <span class="seg-thumb" aria-hidden="true"></span>
           <button type="button" role="radio" data-mode="strip" title="平时只有一条细光，最隐蔽">光带</button>
@@ -46,7 +56,8 @@
         </button>
       </div>
 
-      <div id="panelBody" class="fade">
+      <div id="panelBody" class="fade page-stock">
+        <div id="groupTabs" class="tabs" role="tablist" aria-label="分组"></div>
         <div class="info">
           <div class="info-name">
             <span id="curName"></span>
@@ -74,6 +85,35 @@
 
         <div id="chips" class="chips"></div>
       </div>
+
+      <!-- 音乐页 -->
+      <div id="musicPage" class="music-page">
+        <div id="musicEmpty" class="music-empty">现在没有在播放的音乐<br><span>QQ 音乐、网易云、Spotify、浏览器等接入了系统媒体控制的播放器都能显示</span></div>
+        <div id="musicBody">
+          <div class="m-head">
+            <span id="mCover" class="m-cover"></span>
+            <div class="m-meta">
+              <span id="mTitle" class="m-title"></span>
+              <span id="mArtist" class="m-artist"></span>
+              <span id="mApp" class="m-app"></span>
+            </div>
+          </div>
+          <div id="mViz" class="m-viz" aria-hidden="true"></div>
+          <div class="m-progress">
+            <div class="m-track"><span id="mBar" class="m-bar"></span></div>
+            <div class="num m-times"><span id="mPos">0:00</span><span id="mDur">0:00</span></div>
+          </div>
+          <div class="m-ctrls">
+            <button id="mPrev" class="icon-btn big-btn" type="button" aria-label="上一首">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+            </button>
+            <button id="mToggle" class="play-btn" type="button" aria-label="播放 / 暂停"></button>
+            <button id="mNext" class="icon-btn big-btn" type="button" aria-label="下一首">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
       <div id="foot" class="foot"></div>
     </div>
   </div>
@@ -86,6 +126,11 @@
       <span id="bPct" class="num strong"></span>
     </div>
     <svg id="bMini" width="170" height="34" viewBox="0 0 170 34" aria-hidden="true"></svg>
+  </div>
+  <!-- 悬停气泡（音乐） -->
+  <div id="mBubble" class="bubble glass m-bubble" aria-hidden="true">
+    <span id="mbThumb" class="mb-thumb"></span>
+    <span class="mb-meta"><span id="mbTitle" class="mb-title"></span><span id="mbArtist" class="mb-artist"></span></span>
   </div>
 </div>
 <script src="island.js"></script>

@@ -22,5 +22,9 @@ function minute(code) {
 contextBridge.exposeInMainWorld('peek', {
   getConfig: async () => cfg, setConfig: async (p) => Object.assign(cfg, p), getQuotes: async () => quotes,
   getMinute: async (c) => minute(c), search: async () => [], setIgnoreMouse: () => {}, openSettings: () => {},
-  onQuotes: () => {}, onConfig: () => {}, onStatus: () => {}
+  onQuotes: () => {}, onConfig: () => {}, onStatus: () => {},
+  getMedia: async () => ({ active: true, available: true, app: 'QQMusic.exe', title: '夜航（示例）', artist: '示例歌手', album: '示例专辑', status: 'playing', position: 52, duration: 214, updatedAt: Date.now(), receivedAt: Date.now(), canPrev: true, canNext: true, thumb: '' }),
+  mediaCmd: () => {},
+  onMedia: () => {},
+  onLevel: (cb) => { let t = 0; setInterval(() => { t += 1; cb(0.35 + 0.3 * Math.abs(Math.sin(t / 3)) + 0.2 * Math.abs(Math.sin(t * 1.7))); }, 60); }
 });

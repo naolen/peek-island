@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
+    "native": "dotnet publish native/PeekNative/PeekNative.csproj -c Release -o native/publish",
     "dist": "electron-builder --win nsis --x64 --publish never",
     "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots"
   },
@@ -27,6 +28,15 @@
       "src/**/*",
       "assets/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/publish",
+        "to": "native",
+        "filter": [
+          "PeekNative.exe"
+        ]
+      }
     ],
     "directories": {
       "buildResources": "build",

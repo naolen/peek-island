@@ -16,6 +16,8 @@ const DEFAULTS = {
   // 涨跌幅超过这个值，光带上那一段会“呼吸”
   breatheAbove: 3,
   bossKey: 'Control+Alt+S',
+  // 在岛上显示正在播放的音乐（QQ 音乐、网易云、Spotify、浏览器等）
+  music: true,
   // 外观：classic = 经典黑；glass = 液态玻璃（更透）
   style: 'classic',
   // 整体不透明度 0.3 ~ 1，越低越不显眼
@@ -40,6 +42,7 @@ function sanitize(cfg) {
   const out = Object.assign({}, DEFAULTS, cfg || {});
   if (!['strip', 'auto', 'pinned'].includes(out.mode)) out.mode = DEFAULTS.mode;
   out.redUp = out.redUp !== false;
+  out.music = out.music !== false;
   out.refreshMs = clampInt(out.refreshMs, 1500, 60000, DEFAULTS.refreshMs);
   out.rotateMs = clampInt(out.rotateMs, 1500, 60000, DEFAULTS.rotateMs);
   out.collapseDelayMs = clampInt(out.collapseDelayMs, 200, 10000, DEFAULTS.collapseDelayMs);

@@ -1,5 +1,8 @@
 node_modules/
 dist/
 shots/
+native/publish/
+native/**/bin/
+native/**/obj/
 *.log
 .DS_Store

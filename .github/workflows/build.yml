@@ -33,7 +33,26 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
       - run: npm ci
+      - name: 编译原生小助手 PeekNative.exe
+        run: npm run native
+      - name: 检查小助手能启动并输出 ready
+        shell: pwsh
+        run: |
+          $p = New-Object System.Diagnostics.Process
+          $p.StartInfo.FileName = "native/publish/PeekNative.exe"
+          $p.StartInfo.RedirectStandardInput = $true
+          $p.StartInfo.RedirectStandardOutput = $true
+          $p.StartInfo.UseShellExecute = $false
+          $null = $p.Start()
+          $line = $p.StandardOutput.ReadLine()
+          Write-Host "first line: $line"
+          $p.StandardInput.Close()
+          if (-not $p.WaitForExit(10000)) { $p.Kill(); throw "PeekNative 没有在 stdin 关闭后退出" }
+          if ($line -notmatch '"type":"ready"') { throw "PeekNative 没有输出 ready" }
       - run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

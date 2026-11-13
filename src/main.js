@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, screen, Tray, Menu, globalShortcut, nativeI
 const path = require('path');
 const { ConfigStore } = require('./config');
 const feed = require('./feed');
+const { NativeHelper } = require('./native');
 
 // 岛窗口的尺寸要能装下最大的展开面板；没有内容的透明区域会把点击穿透给下面的软件
 // 按最大缩放 1.2 倍、最大顶部偏移 40px 留足空间
@@ -17,6 +18,9 @@ let hidden = false;
 let pollTimer = null;
 let lastQuotes = {};
 let online = true;
+let native = null;
+// 当前媒体状态；封面只在换歌时由小助手发送，这里缓存起来
+let media = { active: false, available: false };
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -166,6 +170,30 @@ function buildTray() {
   ]));
 }
 
+function setupNative() {
+  native = new NativeHelper({ packaged: app.isPackaged, resourcesPath: process.resourcesPath });
+  native.on('ready', () => {
+    media.available = true;
+    broadcast('media', media);
+  });
+  native.on('unavailable', (reason) => {
+    media = { active: false, available: false, reason };
+    broadcast('media', media);
+  });
+  native.on('media', (m) => {
+    const thumb = m.thumb === null || m.thumb === undefined ? media.thumb : m.thumb;
+    media = Object.assign({}, m, { thumb, available: true, receivedAt: Date.now() });
+    broadcast('media', media);
+    // 只有在放歌时才让小助手推送音量峰值
+    native.send({ cmd: 'level', on: media.active && media.status === 'playing' });
+  });
+  native.on('level', (l) => {
+    if (islandWin && !islandWin.isDestroyed()) islandWin.webContents.send('level', l.peak);
+  });
+  native.on('error', (e) => console.warn('[native]', e.message));
+  native.start();
+}
+
 function setupIpc() {
   ipcMain.handle('config:get', () => store.get());
   ipcMain.handle('config:set', (_e, patch) => applyConfig(patch || {}));
@@ -182,6 +210,10 @@ function setupIpc() {
     const w = BrowserWindow.fromWebContents(e.sender);
     if (w && w === islandWin) w.setIgnoreMouseEvents(!!ignore, { forward: true });
   });
+  ipcMain.handle('media:get', () => media);
+  ipcMain.on('media:cmd', (_e, cmd) => {
+    if (native && ['toggle', 'play', 'pause', 'next', 'prev'].includes(cmd)) native.send({ cmd });
+  });
   ipcMain.on('settings:open', () => openSettings());
   ipcMain.on('link:open', (_e, url) => {
     if (typeof url === 'string' && /^https:\/\//.test(url)) shell.openExternal(url);
@@ -196,11 +228,15 @@ app.whenReady().then(() => {
   buildTray();
   registerBossKey();
   poll();
+  setupNative();
   screen.on('display-metrics-changed', placeIsland);
   screen.on('display-added', placeIsland);
   screen.on('display-removed', placeIsland);
 });
 
-app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  if (native) native.stop();
+});
 // 关掉设置窗口不退出，常驻托盘
 app.on('window-all-closed', () => {});

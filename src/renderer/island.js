@@ -28,8 +28,16 @@
     cross: -1,
     inside: false,
     segKey: '',
-    minute: {}          // code -> { at, data }
+    minute: {},         // code -> { at, data }
+    page: 'stock',      // 展开面板当前页：stock / music
+    media: { active: false, available: false },
+    level: 0,
+    lastPlayingAt: 0
   };
+  const VIZ_BARS = 36;
+  const levels = new Array(VIZ_BARS).fill(0);
+  // 暂停超过这么久就不再在岛上显示音乐
+  const PAUSE_HIDE_MS = 5 * 60 * 1000;
   let hoverTimer = null, leaveTimer = null, rotateTimer = null, resetTimer = null, minuteTimer = null;
   let lastWheel = 0;
 
@@ -62,20 +70,24 @@
     return 'strip';
   }
 
+  function islandWidth() { return SIZES.island[0] + (musicActive() ? 76 : 0); }
+
   function applyForm() {
     const f = form();
     morph.dataset.form = f;
     hot.classList.toggle('has-body', f !== 'strip');
     let w, h, r;
     if (f === 'panel') { w = 600; h = panel.offsetHeight; r = 30; }
+    else if (f === 'island') { [, h, r] = SIZES.island; w = islandWidth(); }
     else [w, h, r] = SIZES[f];
     morph.style.width = w + 'px';
     morph.style.height = h + 'px';
-    morph.style.borderRadius = st.cfg.topOffset > 0 ? `${r}px` : `0 0 ${r}px ${r}px`;
-    if (f !== 'strip' && typeof st.hot === 'number') st.hot = null;
+    morph.style.borderRadius = (Number(st.cfg.topOffset) || 0) > 0 ? `${r}px` : `0 0 ${r}px ${r}px`;
+    if (f !== 'strip' && (typeof st.hot === 'number' || st.hot === 'musicSeg')) st.hot = null;
     if (f === 'panel') st.hot = null;
     renderBubble();
     for (const el of segsEl.children) el.classList.toggle('hot', f === 'strip' && st.hot === Number(el.dataset.i));
+    $('musicSeg').classList.toggle('hot', f === 'strip' && st.hot === 'musicSeg');
   }
 
   // ---------- 光带 ----------
@@ -134,6 +146,7 @@
 
   // ---------- 气泡 ----------
   function renderBubble() {
+    renderMusicBubble();
     const f = form();
     let s = null, x = 0, top = 22;
     if (f === 'strip' && typeof st.hot === 'number') {
@@ -143,7 +156,8 @@
     } else if (f === 'island' && st.hot === 'ticker') {
       const list = stocks();
       s = list.length ? list[st.tIdx % list.length] : null;
-      x = SIZES.island[0] / 2;
+      const tz = $('tickerZone');
+      x = tz.offsetLeft + tz.offsetWidth / 2;
       top = 44;
     }
     if (!s) { bubble.classList.remove('show'); return; }
@@ -190,7 +204,149 @@
     return p;
   }
 
+  // ---------- 音乐 ----------
+  const APP_NAMES = [
+    [/qqmusic/i, 'QQ 音乐'], [/cloudmusic|netease/i, '网易云音乐'], [/spotify/i, 'Spotify'], [/kugou/i, '酷狗音乐'],
+    [/kwmusic|kuwo/i, '酷我音乐'], [/applemusic|apple\.music/i, 'Apple Music'], [/msedge/i, 'Edge 浏览器'],
+    [/chrome/i, 'Chrome 浏览器'], [/firefox/i, 'Firefox 浏览器'], [/zunemusic|music\.ui|mediaplayer/i, '媒体播放器'],
+    [/potplayer/i, 'PotPlayer'], [/foobar/i, 'foobar2000'], [/bilibili/i, '哔哩哔哩']
+  ];
+  const NOTE_SVG = '<svg class="note-icon" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  const PLAY_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>';
+  const PAUSE_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+  function appName(id) {
+    if (!id) return '';
+    for (const [re, name] of APP_NAMES) if (re.test(id)) return name;
+    return id.replace(/\.exe$/i, '').replace(/^.*[\\/!]/, '');
+  }
+  const isPlaying = () => st.media.active && st.media.status === 'playing';
+  function musicActive() {
+    const m = st.media;
+    if (!st.cfg || st.cfg.music === false || !m.active || !(m.title || m.artist)) return false;
+    if (m.status === 'playing') return true;
+    return m.status === 'paused' && Date.now() - st.lastPlayingAt < PAUSE_HIDE_MS;
+  }
+  function setCover(el, thumb) {
+    const url = thumb && /^data:image\//.test(thumb) ? thumb : '';
+    if (el.dataset.src === url) return;
+    el.dataset.src = url;
+    el.style.backgroundImage = url ? `url("${url}")` : '';
+    el.innerHTML = url ? '' : NOTE_SVG;
+  }
+  function fmtTime(s) {
+    if (!Number.isFinite(s) || s < 0) s = 0;
+    s = Math.floor(s);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function mediaPosition() {
+    const m = st.media;
+    let pos = m.position || 0;
+    if (m.status === 'playing') {
+      // 用系统给的“进度更新时间”往后推算；有的播放器这个时间不准，就用收到消息的时间
+      const base = m.updatedAt && Math.abs(Date.now() - m.updatedAt) < 6 * 3600 * 1000 ? m.updatedAt : m.receivedAt;
+      if (base) pos += (Date.now() - base) / 1000;
+    }
+    return m.duration > 0 ? Math.min(pos, m.duration) : pos;
+  }
+
+  function renderMusic() {
+    const m = st.media;
+    const active = musicActive();
+    const wasActive = document.body.classList.contains('has-music');
+    document.body.classList.toggle('has-music', active);
+    const playing = isPlaying();
+
+    // 光带上的音乐段 / 岛上的音乐区
+    $('musicSeg').setAttribute('aria-label', active ? `正在播放：${m.title} ${m.artist || ''}` : '音乐');
+    setCover($('mzThumb'), m.thumb);
+    $('mzThumb').classList.toggle('spin', playing);
+    if (!playing) setLevel(0);
+
+    // 音乐页
+    const page = $('musicPage');
+    page.classList.toggle('empty', !m.active || !(m.title || m.artist));
+    if (m.active) {
+      setCover($('mCover'), m.thumb);
+      $('mTitle').textContent = m.title || '未知曲目';
+      $('mArtist').textContent = [m.artist, m.album].filter(Boolean).join(' · ') || ' ';
+      $('mApp').textContent = '来自 ' + appName(m.app);
+      $('mPrev').disabled = m.canPrev === false;
+      $('mNext').disabled = m.canNext === false;
+      $('mToggle').innerHTML = playing ? PAUSE_SVG : PLAY_SVG;
+      $('mToggle').setAttribute('aria-label', playing ? '暂停' : '播放');
+    }
+    renderProgress();
+    if (wasActive !== active) applyForm();
+    else if (form() === 'panel') morph.style.height = panel.offsetHeight + 'px';
+    renderMusicBubble();
+  }
+
+  function renderProgress() {
+    const m = st.media;
+    const pos = mediaPosition();
+    $('mPos').textContent = fmtTime(pos);
+    $('mDur').textContent = m.duration > 0 ? fmtTime(m.duration) : '--:--';
+    $('mBar').style.width = m.duration > 0 ? (pos / m.duration * 100).toFixed(2) + '%' : '0%';
+  }
+
+  // 音量峰值 → 岛上的 4 根音律条、光带音乐段的亮度、音乐页的波形
+  const EQ_SHAPE = [0.62, 1, 0.78, 0.9];
+  function setLevel(peak) {
+    st.level = peak;
+    const t = Date.now() / 160;
+    $('mzEq').querySelectorAll('i').forEach((el, i) => {
+      const wobble = 0.75 + 0.25 * Math.sin(t + i * 1.7);
+      el.style.transform = `scaleY(${Math.max(0.18, Math.min(1, peak * 1.6 * EQ_SHAPE[i] * wobble)).toFixed(3)})`;
+    });
+    const seg = $('musicSeg');
+    seg.style.setProperty('--o', (0.3 + Math.min(1, peak * 1.4) * 0.7).toFixed(2));
+    levels.push(peak);
+    levels.shift();
+    if (form() === 'panel' && st.page === 'music') {
+      const viz = $('mViz');
+      if (viz.children.length !== VIZ_BARS) viz.innerHTML = '<i></i>'.repeat(VIZ_BARS);
+      for (let i = 0; i < VIZ_BARS; i++) {
+        viz.children[i].style.transform = `scaleY(${Math.max(0.06, Math.min(1, levels[i] * 1.5)).toFixed(3)})`;
+      }
+    }
+  }
+
+  function renderMusicBubble() {
+    const mb = $('mBubble');
+    const f = form();
+    const show = musicActive() && ((f === 'strip' && st.hot === 'musicSeg') || (f === 'island' && st.hot === 'musicZone'));
+    if (!show) { mb.classList.remove('show'); return; }
+    const el = f === 'strip' ? $('musicSeg') : $('musicZone');
+    // 音乐区贴在右侧：按“离右边多远”来算，岛还在变宽变窄时位置也是对的
+    const parentW = el.offsetParent ? el.offsetParent.offsetWidth : 0;
+    const fromRight = parentW - (el.offsetLeft + el.offsetWidth / 2);
+    const targetW = f === 'strip' ? SIZES.strip[0] : islandWidth();
+    mb.style.left = (targetW - fromRight) + 'px';
+    mb.style.top = (f === 'strip' ? 22 : 44) + 'px';
+    setCover($('mbThumb'), st.media.thumb);
+    $('mbTitle').textContent = st.media.title || '未知曲目';
+    $('mbArtist').textContent = (st.media.artist ? st.media.artist + ' · ' : '') + appName(st.media.app) + (isPlaying() ? '' : ' · 已暂停');
+    mb.classList.add('show');
+  }
+
+  function onMedia(m) {
+    st.media = m || { active: false };
+    if (isPlaying()) st.lastPlayingAt = Date.now();
+    renderMusic();
+  }
+
   // ---------- 展开面板 ----------
+  function setPage(page) {
+    st.page = page;
+    panel.dataset.page = page;
+    const pages = ['stock', 'music'];
+    document.querySelectorAll('#pageTabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.page === page)));
+    document.querySelector('.pages-thumb').style.left = (3 + pages.indexOf(page) * 80) + 'px';
+    if (page === 'music') renderMusic();
+    if (form() === 'panel') morph.style.height = panel.offsetHeight + 'px';
+  }
+
   function renderPanel() {
     const cfg = st.cfg;
     $('groupTabs').innerHTML = cfg.groups.map((g, i) => `<button type="button" class="tab" role="tab" data-g="${i}" aria-selected="${i === cfg.activeGroup}">${esc(g.name)}<span class="cnt num">${g.codes.length}</span></button>`).join('');
@@ -313,11 +469,12 @@
   }
 
   // ---------- 交互 ----------
-  function openPanel(sel) {
+  function openPanel(sel, page) {
     st.open = true;
     st.hot = null;
     st.cross = -1;
     if (typeof sel === 'number') st.sel = sel;
+    setPage(page || 'stock');
     renderPanel();
     applyForm();
     refreshSelectedMinute(false);
@@ -394,8 +551,42 @@
   tz.addEventListener('mouseleave', () => { st.hot = null; renderBubble(); });
   tz.addEventListener('click', () => { const n = stocks().length; openPanel(n ? st.tIdx % n : 0); });
 
+  // 变形结束后再校正一次气泡位置
+  morph.addEventListener('transitionend', (e) => {
+    if (e.target === morph && e.propertyName === 'width') renderBubble();
+  });
+
+  // 音乐：光带上的紫色段、岛上的右半边
+  const ms = $('musicSeg');
+  ms.addEventListener('mouseenter', () => { st.hot = 'musicSeg'; applyForm(); });
+  ms.addEventListener('mouseleave', () => { if (st.hot === 'musicSeg') { st.hot = null; applyForm(); } });
+  ms.addEventListener('click', () => openPanel(undefined, 'music'));
+  const mz = $('musicZone');
+  mz.addEventListener('mouseenter', () => { st.hot = 'musicZone'; renderBubble(); });
+  mz.addEventListener('mouseleave', () => { if (st.hot === 'musicZone') { st.hot = null; renderBubble(); } });
+  mz.addEventListener('click', () => openPanel(undefined, 'music'));
+  $('pageTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-page]');
+    if (!b) return;
+    setPage(b.dataset.page);
+    if (b.dataset.page === 'stock') { renderPanel(); refreshSelectedMinute(false); }
+  });
+  $('mPrev').addEventListener('click', () => api.mediaCmd('prev'));
+  $('mNext').addEventListener('click', () => api.mediaCmd('next'));
+  $('mToggle').addEventListener('click', () => {
+    // 先在界面上切换，等系统回报再校正，按下去立刻有反馈
+    st.media = Object.assign({}, st.media, { status: isPlaying() ? 'paused' : 'playing', position: mediaPosition(), receivedAt: Date.now(), updatedAt: 0 });
+    renderMusic();
+    api.mediaCmd('toggle');
+  });
+  setInterval(() => {
+    if (form() === 'panel' && st.page === 'music' && isPlaying()) renderProgress();
+    // 暂停太久后自动从岛上收起
+    if (document.body.classList.contains('has-music') && !musicActive()) renderMusic();
+  }, 500);
+
   hot.addEventListener('wheel', (e) => {
-    if (e.target.closest('#chart')) return;
+    if (e.target.closest('#chart') || e.target.closest('#musicPage') || e.target.closest('#musicZone') || e.target.closest('#musicSeg')) return;
     const now = Date.now();
     if (now - lastWheel < 420) return;
     lastWheel = now;
@@ -438,11 +629,11 @@
   function applyAppearance() {
     const c = st.cfg;
     const root = document.documentElement.style;
-    root.setProperty('--scale', String(c.scale));
-    root.setProperty('--opacity', String(c.opacity));
+    root.setProperty('--scale', String(Number(c.scale) || 1));
+    root.setProperty('--opacity', String(Number(c.opacity) || 1));
     document.body.classList.toggle('glass', c.style === 'glass');
-    document.body.classList.toggle('floating', c.topOffset > 0);
-    hot.style.top = c.topOffset + 'px';
+    document.body.classList.toggle('floating', (Number(c.topOffset) || 0) > 0);
+    hot.style.top = (Number(c.topOffset) || 0) + 'px';
   }
 
   function renderAll() {
@@ -452,12 +643,14 @@
     renderSegments();
     renderTicker();
     renderPanel();
+    renderMusic();
     applyForm();
   }
 
   async function init() {
     st.cfg = await api.getConfig();
     st.quotes = await api.getQuotes();
+    setPage('stock');
     renderAll();
     startRotation();
     api.onQuotes((q) => {
@@ -476,6 +669,11 @@
       if (rotateChanged) startRotation();
     });
     api.onStatus((s) => { st.online = s.online; renderPanel(); });
+    if (api.getMedia) {
+      onMedia(await api.getMedia());
+      api.onMedia(onMedia);
+      api.onLevel((p) => { if (isPlaying()) setLevel(Number(p) || 0); });
+    }
   }
 
   init();
