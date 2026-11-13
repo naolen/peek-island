@@ -98,7 +98,7 @@
         const added = g.codes.includes(r.code);
         return `<button type="button" class="result ${i === activeResult ? 'active' : ''} ${added ? 'added' : ''}" data-i="${i}" ${added ? 'aria-disabled="true"' : ''}>
           <span>${esc(r.name)}</span><span class="code num">${esc(shortCode(r.code))}</span>
-          <span class="type">${added ? '已在分组中' : esc(TYPE_NAMES[r.type] || marketName(r.code))}</span></button>`;
+          <span class="type">${added ? '已在分组中' : esc(TYPE_NAMES[r.type] || r.type || marketName(r.code))}</span></button>`;
       }).join('');
     }
     box.classList.add('show');

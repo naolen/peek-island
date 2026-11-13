@@ -74,8 +74,8 @@ src/
   main.js        主进程：顶部透明置顶窗口、鼠标穿透、托盘、老板键、行情轮询
   preload.js     暴露给界面的接口
   config.js      配置读写（%APPDATA%/peek-island/config.json）
-  feed.js        网络请求（GBK 解码）
-  quotes.js      行情数据解析（纯函数，有单元测试）
+  feed.js        网络请求
+  quotes.js      东方财富接口地址与数据解析（纯函数，有单元测试）
   native.js      启动和管理原生小助手
   renderer/
     island.*     光带 / 岛 / 展开面板
@@ -87,7 +87,7 @@ test/            单元测试
 
 ## 数据来源与免责
 
-行情来自腾讯行情的公开网页接口（实时报价 `qt.gtimg.cn`、分时 `web.ifzq.gtimg.cn`、搜索 `smartbox.gtimg.cn`），非官方 API，可能有延迟，也可能随时变化。本工具仅供个人查看行情，不构成任何投资建议。
+行情来自东方财富的公开网页接口（实时报价 `push2.eastmoney.com`、分时 `push2his.eastmoney.com`、搜索 `searchapi.eastmoney.com`），非官方 API，可能有延迟，也可能随时变化。本工具仅供个人查看行情，不构成任何投资建议。
 
 ## 规划
 

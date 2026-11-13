@@ -1,20 +1,21 @@
-// 网络请求：拉取实时报价、分时、搜索。在主进程里运行，避免渲染进程的跨域限制。
-const iconv = require('iconv-lite');
-const { parseQuotes, parseMinute, parseHint, minuteUrl } = require('./quotes');
+// 网络请求：拉取实时报价、分时、搜索（东方财富公开接口）。在主进程里运行，避免渲染进程的跨域限制。
+const { toSecids, quotesUrl, parseQuotes, minuteUrl, parseMinute, searchUrl, parseSearch } = require('./quotes');
 
 const HEADERS = {
-  Referer: 'https://gu.qq.com/',
+  Referer: 'https://quote.eastmoney.com/',
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 };
 
-async function get(url, { gbk = false, timeoutMs = 6000 } = {}) {
+// 美股代码实际在哪个交易所（105 / 106 / 107），第一次查到后记住，之后只请求一个
+const usMarket = {};
+
+async function get(url, { timeoutMs = 6000 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { headers: HEADERS, signal: ctrl.signal });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const buf = Buffer.from(await res.arrayBuffer());
-    return gbk ? iconv.decode(buf, 'gbk') : buf.toString('utf8');
+    return await res.text();
   } finally {
     clearTimeout(t);
   }
@@ -23,12 +24,16 @@ async function get(url, { gbk = false, timeoutMs = 6000 } = {}) {
 /** 批量拉报价，codes 例如 ['sh600519','hk00700','usNVDA'] */
 async function fetchQuotes(codes) {
   if (!codes.length) return {};
+  const secids = [];
+  for (const c of codes) secids.push(...toSecids(c, usMarket[c]));
   const out = {};
-  // 一次最多 60 个，避免 URL 过长
-  for (let i = 0; i < codes.length; i += 60) {
-    const part = codes.slice(i, i + 60);
-    const text = await get('https://qt.gtimg.cn/q=' + part.join(','), { gbk: true });
+  // 一次最多 80 个 secid，避免 URL 过长
+  for (let i = 0; i < secids.length; i += 80) {
+    const text = await get(quotesUrl(secids.slice(i, i + 80)));
     Object.assign(out, parseQuotes(text));
+  }
+  for (const [code, q] of Object.entries(out)) {
+    if (/^us/.test(code) && q.market) usMarket[code] = q.market;
   }
   return out;
 }
@@ -41,8 +46,8 @@ async function fetchMinute(code, symbol, prevClose) {
 async function search(q) {
   q = String(q || '').trim();
   if (!q) return [];
-  const text = await get('https://smartbox.gtimg.cn/s3/?v=2&t=all&c=1&q=' + encodeURIComponent(q), { gbk: true });
-  return parseHint(text).slice(0, 12);
+  const text = await get(searchUrl(q));
+  return parseSearch(text).slice(0, 12);
 }
 
 module.exports = { fetchQuotes, fetchMinute, search };
