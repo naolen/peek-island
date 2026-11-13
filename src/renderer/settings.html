@@ -57,6 +57,24 @@
     </section>
 
     <section class="card">
+      <div class="card-title">剪贴板与待办</div>
+      <div class="grid">
+        <label class="field">记录剪贴板
+          <select id="clipEnabled" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </label>
+        <label class="field">记录图片
+          <select id="clipImages" class="input"><option value="1">记录</option><option value="0">只记文字</option></select>
+        </label>
+        <label class="field">最多保留（条，收藏不计）<input id="clipLimit" class="input" type="number" min="20" max="2000" step="10"></label>
+        <label class="field">唤出剪贴板 <span id="clipKeyStatus" class="key-status"></span><input id="clipKey" class="input" placeholder="Control+Alt+V"></label>
+        <label class="field">唤出待办 <span id="todoKeyStatus" class="key-status"></span><input id="todoKey" class="input" placeholder="Control+Alt+T"></label>
+        <label class="field">没做完的事
+          <select id="todoRollover" class="input"><option value="1">第二天自动顺延</option><option value="0">留在当天</option></select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
       <div class="card-title">显示与快捷键</div>
       <div class="grid">
         <label class="field">平时显示为
@@ -75,7 +93,7 @@
         <label class="field">行情刷新（秒）<input id="refresh" class="input" type="number" min="1.5" max="60" step="0.5"></label>
         <label class="field">岛上轮播（秒）<input id="rotate" class="input" type="number" min="1.5" max="60" step="0.5"></label>
         <label class="field">离开后缩回（秒）<input id="collapse" class="input" type="number" min="0.2" max="10" step="0.1"></label>
-        <label class="field">老板键<input id="bossKey" class="input" placeholder="Control+Alt+S"></label>
+        <label class="field">老板键 <span id="bossKeyStatus" class="key-status"></span><input id="bossKey" class="input" placeholder="Control+Alt+S"></label>
         <label class="field">正在播放的音乐
           <select id="music" class="input">
             <option value="1">在岛上显示</option>

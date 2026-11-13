@@ -73,6 +73,13 @@
     if (document.activeElement !== $('bossKey')) $('bossKey').value = cfg.bossKey;
     $('style').value = cfg.style;
     $('music').value = cfg.music ? '1' : '0';
+    $('clipEnabled').value = cfg.clipEnabled ? '1' : '0';
+    $('clipImages').value = cfg.clipImages ? '1' : '0';
+    $('todoRollover').value = cfg.todoRollover ? '1' : '0';
+    if (document.activeElement !== $('clipLimit')) $('clipLimit').value = cfg.clipLimit;
+    if (document.activeElement !== $('clipKey')) $('clipKey').value = cfg.clipKey;
+    if (document.activeElement !== $('todoKey')) $('todoKey').value = cfg.todoKey;
+    renderShortcutStatus();
     $('opacity').value = cfg.opacity; $('opacityVal').textContent = Math.round(cfg.opacity * 100) + '%';
     $('scale').value = cfg.scale; $('scaleVal').textContent = Math.round(cfg.scale * 100) + '%';
     $('topOffset').value = cfg.topOffset; $('topVal').textContent = cfg.topOffset ? cfg.topOffset + 'px' : '贴边';
@@ -198,6 +205,28 @@
   $('bossKey').addEventListener('change', () => save({ bossKey: $('bossKey').value.trim() }));
   $('style').addEventListener('change', () => save({ style: $('style').value }));
   $('music').addEventListener('change', () => save({ music: $('music').value === '1' }));
+  $('clipEnabled').addEventListener('change', () => save({ clipEnabled: $('clipEnabled').value === '1' }));
+  $('clipImages').addEventListener('change', () => save({ clipImages: $('clipImages').value === '1' }));
+  $('todoRollover').addEventListener('change', () => save({ todoRollover: $('todoRollover').value === '1' }));
+  $('clipLimit').addEventListener('change', () => save({ clipLimit: Number($('clipLimit').value) }));
+  $('clipKey').addEventListener('change', () => save({ clipKey: $('clipKey').value.trim() }));
+  $('todoKey').addEventListener('change', () => save({ todoKey: $('todoKey').value.trim() }));
+
+  // 快捷键是否注册成功（可能被别的软件占用）
+  let shortcuts = {};
+  const KEY_TEXT = { busy: '被其他软件占用', invalid: '格式不对，例如 Control+Alt+V', off: '未设置' };
+  function renderShortcutStatus() {
+    for (const k of ['bossKey', 'clipKey', 'todoKey']) {
+      const el = $(k + 'Status');
+      if (!el) continue;
+      const s = shortcuts[k];
+      el.textContent = s && s !== 'ok' ? '· ' + KEY_TEXT[s] : '';
+    }
+  }
+  if (api.getShortcuts) {
+    api.getShortcuts().then((s) => { shortcuts = s || {}; renderShortcutStatus(); });
+    api.onShortcuts((s) => { shortcuts = s || {}; renderShortcutStatus(); });
+  }
   // 拖动滑块时实时生效
   [['opacity', 'opacity'], ['scale', 'scale'], ['topOffset', 'topOffset']].forEach(([id, key]) => {
     $(id).addEventListener('input', () => save({ [key]: Number($(id).value) }));

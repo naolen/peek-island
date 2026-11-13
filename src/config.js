@@ -18,6 +18,14 @@ const DEFAULTS = {
   bossKey: 'Control+Alt+S',
   // 在岛上显示正在播放的音乐（QQ 音乐、网易云、Spotify、浏览器等）
   music: true,
+  // 剪贴板历史
+  clipEnabled: true,
+  clipImages: true,
+  clipLimit: 200,
+  clipKey: 'Control+Alt+V',
+  // 待办：没做完的事第二天自动顺延
+  todoRollover: true,
+  todoKey: 'Control+Alt+T',
   // 外观：classic = 经典黑；glass = 液态玻璃（更透）
   style: 'classic',
   // 整体不透明度 0.3 ~ 1，越低越不显眼
@@ -43,6 +51,14 @@ function sanitize(cfg) {
   if (!['strip', 'auto', 'pinned'].includes(out.mode)) out.mode = DEFAULTS.mode;
   out.redUp = out.redUp !== false;
   out.music = out.music !== false;
+  out.clipEnabled = out.clipEnabled !== false;
+  out.clipImages = out.clipImages !== false;
+  out.clipLimit = clampInt(out.clipLimit, 20, 2000, DEFAULTS.clipLimit);
+  out.todoRollover = out.todoRollover !== false;
+  for (const k of ['clipKey', 'todoKey']) {
+    if (typeof out[k] !== 'string') out[k] = DEFAULTS[k];
+    out[k] = out[k].trim().slice(0, 40);
+  }
   out.refreshMs = clampInt(out.refreshMs, 1500, 60000, DEFAULTS.refreshMs);
   out.rotateMs = clampInt(out.rotateMs, 1500, 60000, DEFAULTS.rotateMs);
   out.collapseDelayMs = clampInt(out.collapseDelayMs, 200, 10000, DEFAULTS.collapseDelayMs);

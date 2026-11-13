@@ -5,10 +5,10 @@ const fs = require('fs');
 const out = process.argv[process.argv.length - 1];
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({ width: 720, height: 660, show: true, backgroundColor: '#2A313C', webPreferences: { preload: path.join(__dirname, 'mock-preload.js'), contextIsolation: true, sandbox: false } });
+  const win = new BrowserWindow({ width: 760, height: 720, show: true, backgroundColor: '#2A313C', webPreferences: { preload: path.join(__dirname, 'mock-preload.js'), contextIsolation: true, sandbox: false } });
   await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'island.html'));
   const shot = async (name) => { await wait(900); const img = await win.webContents.capturePage(); fs.writeFileSync(path.join(out, name + '.png'), img.toPNG()); };
-  const js = (code) => win.webContents.executeJavaScript(code);
+  const js = (code) => win.webContents.executeJavaScript(code).catch((e) => { console.error('JS 出错：', e.message, '\n', code); app.exit(1); });
   await shot('1-strip');
   await js(`(() => { const s = document.querySelectorAll('.seg-item')[3]; s.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); })()`);
   await shot('2-strip-hover');
@@ -25,6 +25,15 @@ app.whenReady().then(async () => {
   await js(`document.getElementById('btnClose').click()`);
   await js(`document.getElementById('musicZone').dispatchEvent(new MouseEvent('mouseenter'))`);
   await shot('8-island-music');
+  await js(`document.getElementById('tickerZone').click()`);
+  await js(`document.querySelector('#pageTabs [data-page="clip"]').click()`);
+  await shot('9-panel-clip');
+  await js(`document.querySelector('.clip-row [data-act="note"]').click()`);
+  await shot('10-panel-clip-note');
+  await js(`document.querySelector('#pageTabs [data-page="todo"]').click()`);
+  await shot('11-panel-todo');
+  await js(`document.getElementById('todoHistory').click()`);
+  await shot('12-panel-todo-history');
   const errs = await js('window.__errs || []');
   console.log('done', errs);
   app.quit();

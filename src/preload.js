@@ -21,5 +21,27 @@ contextBridge.exposeInMainWorld('peek', {
   onConfig: (cb) => on('config', cb),
   onStatus: (cb) => on('status', cb),
   onMedia: (cb) => on('media', cb),
-  onLevel: (cb) => on('level', cb)
+  onLevel: (cb) => on('level', cb),
+  // 剪贴板
+  clipList: (q) => ipcRenderer.invoke('clip:list', q),
+  clipCopy: (id) => ipcRenderer.invoke('clip:copy', id),
+  clipUpdate: (id, patch) => ipcRenderer.invoke('clip:update', id, patch),
+  clipRemove: (id) => ipcRenderer.invoke('clip:remove', id),
+  clipClear: () => ipcRenderer.invoke('clip:clear'),
+  onClipChanged: (cb) => on('clip:changed', cb),
+  // 待办
+  todoGet: (key) => ipcRenderer.invoke('todo:get', key),
+  todoAdd: (text) => ipcRenderer.invoke('todo:add', text),
+  todoToggle: (key, id) => ipcRenderer.invoke('todo:toggle', key, id),
+  todoEdit: (key, id, text) => ipcRenderer.invoke('todo:edit', key, id, text),
+  todoRemove: (key, id) => ipcRenderer.invoke('todo:remove', key, id),
+  todoMove: (key, id, d) => ipcRenderer.invoke('todo:move', key, id, d),
+  todoNote: (note) => ipcRenderer.invoke('todo:note', note),
+  todoExport: (which) => ipcRenderer.invoke('todo:export', which),
+  onTodoChanged: (cb) => on('todo:changed', cb),
+  // 焦点与快捷键
+  setFocus: (on) => ipcRenderer.send('focus:set', on),
+  onPageOpen: (cb) => on('page:open', cb),
+  getShortcuts: () => ipcRenderer.invoke('shortcuts:get'),
+  onShortcuts: (cb) => on('shortcuts', cb)
 });

@@ -40,6 +40,8 @@
           <span class="pages-thumb" aria-hidden="true"></span>
           <button type="button" role="tab" data-page="stock"><i class="pdot" style="background:#FF8A7A"></i>行情</button>
           <button type="button" role="tab" data-page="music"><i class="pdot" style="background:#A98BFF"></i>音乐</button>
+          <button type="button" role="tab" data-page="clip"><i class="pdot" style="background:#6BD3C8"></i>剪贴板</button>
+          <button type="button" role="tab" data-page="todo"><i class="pdot" style="background:#FFC26B"></i>待办</button>
         </div>
         <div class="spacer"></div>
         <div id="modeSeg" class="seg" role="radiogroup" aria-label="平时显示为">
@@ -114,6 +116,48 @@
           </div>
         </div>
       </div>
+      <!-- 剪贴板页 -->
+      <div id="clipPage" class="clip-page">
+        <div class="clip-bar">
+          <label for="clipSearch" class="sr-only">搜索剪贴板</label>
+          <input id="clipSearch" class="field-input" placeholder="搜索内容或备注…" autocomplete="off">
+          <div id="clipKinds" class="mini-seg" role="radiogroup" aria-label="筛选">
+            <button type="button" role="radio" data-kind="all" aria-checked="true">全部</button>
+            <button type="button" role="radio" data-kind="fav" aria-checked="false">收藏</button>
+            <button type="button" role="radio" data-kind="text" aria-checked="false">文字</button>
+            <button type="button" role="radio" data-kind="image" aria-checked="false">图片</button>
+          </div>
+        </div>
+        <div id="clipList" class="clip-list" role="list"></div>
+        <div class="list-foot">
+          <span id="clipCount"></span>
+          <button id="clipClear" class="link-btn" type="button">清空（保留收藏）</button>
+        </div>
+      </div>
+
+      <!-- 待办页 -->
+      <div id="todoPage" class="todo-page">
+        <div class="todo-head">
+          <span id="todoDate" class="todo-date"></span>
+          <span id="todoStat" class="num todo-stat"></span>
+          <span class="spacer"></span>
+          <button id="todoToday" class="link-btn" type="button">回到今天</button>
+          <button id="todoHistory" class="link-btn" type="button">历史</button>
+          <button id="todoExport" class="link-btn" type="button">导出 Markdown</button>
+        </div>
+        <div id="todoDayView">
+          <div id="todoAddRow" class="todo-add">
+            <label for="todoInput" class="sr-only">添加待办</label>
+            <input id="todoInput" class="field-input" placeholder="添加待办，回车确认" maxlength="300" autocomplete="off">
+          </div>
+          <div id="todoList" class="todo-list" role="list"></div>
+          <label for="todoNote" class="todo-note-label">今日笔记</label>
+          <textarea id="todoNote" class="todo-note" placeholder="随手记点什么，自动保存" maxlength="20000"></textarea>
+          <div id="todoNoteView" class="todo-note-view"></div>
+        </div>
+        <div id="todoArchive" class="todo-archive" role="list"></div>
+      </div>
+
       <div id="foot" class="foot"></div>
     </div>
   </div>

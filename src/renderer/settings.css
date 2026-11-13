@@ -60,3 +60,4 @@ button, input, select { font-family: inherit; font-size: 13px; color: inherit; }
 .field .input { color: #F2F2F4; }
 input[type="range"] { width: 100%; accent-color: #5B8CFF; height: 34px; }
 .card-title .hint { font-weight: 400; margin-left: 8px; }
+.key-status { color: #FFC26B; }

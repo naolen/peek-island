@@ -337,14 +337,36 @@
   }
 
   // ---------- 展开面板 ----------
+  const PAGES = ['stock', 'music', 'clip', 'todo'];
+  const INPUT_PAGES = ['clip', 'todo'];
   function setPage(page) {
+    if (!PAGES.includes(page)) page = 'stock';
     st.page = page;
     panel.dataset.page = page;
-    const pages = ['stock', 'music'];
     document.querySelectorAll('#pageTabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.page === page)));
-    document.querySelector('.pages-thumb').style.left = (3 + pages.indexOf(page) * 80) + 'px';
+    document.querySelector('.pages-thumb').style.left = (3 + PAGES.indexOf(page) * 74) + 'px';
     if (page === 'music') renderMusic();
+    if (page === 'clip') loadClips();
+    if (page === 'todo') loadTodo();
+    syncFocus();
+    if (st.cfg) renderFoot();
+    fitPanel();
+  }
+  /** 面板内容变化后，让岛的高度跟着变 */
+  function fitPanel() {
     if (form() === 'panel') morph.style.height = panel.offsetHeight + 'px';
+  }
+  /** 剪贴板 / 待办页需要打字：这时才让窗口接收键盘焦点，其他时候不抢焦点 */
+  let focusOn = false;
+  function syncFocus() {
+    const want = st.open && INPUT_PAGES.includes(st.page);
+    if (want === focusOn) return;
+    focusOn = want;
+    api.setFocus(want);
+  }
+  function isTyping() {
+    const a = document.activeElement;
+    return !!(a && panel.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'));
   }
 
   function renderPanel() {
@@ -371,10 +393,22 @@
       $('chips').innerHTML = list.map((s, i) => `<button type="button" class="chip" data-i="${i}" aria-pressed="${i === st.sel}"><span class="n">${esc(s.name)}</span><span class="p num" style="color:${colorOf(s.pct)}">${fmtPct(s.pct)}</span></button>`).join('');
       renderChart();
     }
-    const foot = $('foot');
-    foot.classList.toggle('offline', !st.online);
-    foot.textContent = st.online ? `数据来自腾讯行情公开接口，可能有延迟 · ${cfg.bossKey.replace('Control', 'Ctrl')} 一键隐藏` : '行情连接中断，正在重试…';
+    renderFoot();
     if (form() === 'panel') morph.style.height = panel.offsetHeight + 'px';
+  }
+
+  const keyName = (k) => String(k || '').replace(/Control/g, 'Ctrl').replace(/\+/g, ' + ');
+  function renderFoot() {
+    const cfg = st.cfg;
+    const foot = $('foot');
+    const offline = st.page === 'stock' && !st.online;
+    foot.classList.toggle('offline', offline);
+    const boss = `${keyName(cfg.bossKey)} 一键隐藏`;
+    foot.textContent = offline ? '行情连接中断，正在重试…'
+      : st.page === 'stock' ? `数据来自东方财富，可能有延迟 · ${boss}`
+      : st.page === 'music' ? `支持所有接入系统媒体控制的播放器 · ${boss}`
+      : st.page === 'clip' ? `${keyName(cfg.clipKey)} 随时唤出 · 点一条即复制，回车复制第一条 · Esc 收起`
+      : `${keyName(cfg.todoKey)} 随时唤出 · 点文字可修改 · Esc 收起`;
   }
 
   function renderChart() {
@@ -477,6 +511,7 @@
     setPage(page || 'stock');
     renderPanel();
     applyForm();
+    syncFocus();
     refreshSelectedMinute(false);
     clearInterval(minuteTimer);
     minuteTimer = setInterval(() => { if (st.open) refreshSelectedMinute(true); }, 30000);
@@ -484,7 +519,9 @@
   function closePanel() {
     st.open = false;
     clearInterval(minuteTimer);
+    if (isTyping()) document.activeElement.blur();
     applyForm();
+    syncFocus();
   }
 
   function switchGroup(i) {
@@ -515,11 +552,11 @@
     clearTimeout(hoverTimer);
     clearTimeout(leaveTimer);
     leaveTimer = setTimeout(() => {
+      // 正在面板里打字时，鼠标移开不收起（按 Esc 或点别处才收）
+      if (st.open && isTyping()) return;
       st.hover = false;
       st.hot = null;
-      st.open = false;
-      clearInterval(minuteTimer);
-      applyForm();
+      if (st.open) closePanel(); else applyForm();
     }, st.cfg.collapseDelayMs);
   }
 
@@ -571,6 +608,13 @@
     setPage(b.dataset.page);
     if (b.dataset.page === 'stock') { renderPanel(); refreshSelectedMinute(false); }
   });
+  // Esc 收起；点到别的窗口（本窗口失去焦点）且鼠标不在岛上时收起
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && st.open) { e.preventDefault(); closePanel(); }
+  });
+  window.addEventListener('blur', () => {
+    if (st.open && INPUT_PAGES.includes(st.page) && !st.inside) { st.hover = false; closePanel(); }
+  });
   $('mPrev').addEventListener('click', () => api.mediaCmd('prev'));
   $('mNext').addEventListener('click', () => api.mediaCmd('next'));
   $('mToggle').addEventListener('click', () => {
@@ -586,7 +630,9 @@
   }, 500);
 
   hot.addEventListener('wheel', (e) => {
-    if (e.target.closest('#chart') || e.target.closest('#musicPage') || e.target.closest('#musicZone') || e.target.closest('#musicSeg')) return;
+    // 只在光带、岛的行情区、行情页上用滚轮切分组；其他页面滚轮用来滚动列表
+    if (st.open && st.page !== 'stock') return;
+    if (e.target.closest('#chart') || e.target.closest('#musicZone') || e.target.closest('#musicSeg')) return;
     const now = Date.now();
     if (now - lastWheel < 420) return;
     lastWheel = now;
@@ -624,6 +670,245 @@
     if (ci !== st.cross) { st.cross = ci; renderChart(); }
   });
   hit.addEventListener('mouseleave', () => { st.cross = -1; renderChart(); });
+
+  // ---------- 剪贴板 ----------
+  const clip = { q: '', kind: 'all', items: [], editing: null, clearArmed: 0 };
+  const STAR = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>';
+  const STAR_O = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>';
+  const PEN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+  const XMARK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  const UP = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>';
+  const DOWN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  const TICK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0E1013" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>';
+
+  function ago(t) {
+    const d = (Date.now() - t) / 1000;
+    if (d < 60) return '刚刚';
+    if (d < 3600) return Math.floor(d / 60) + ' 分钟前';
+    const dt = new Date(t), now = new Date();
+    const hm = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+    if (dt.toDateString() === now.toDateString()) return hm;
+    return (dt.getMonth() + 1) + '月' + dt.getDate() + '日 ' + hm;
+  }
+
+  let clipSeq = 0;
+  async function loadClips() {
+    if (!api.clipList) return;
+    const seq = ++clipSeq;
+    const items = await api.clipList({ q: clip.q, kind: clip.kind });
+    if (seq !== clipSeq) return;
+    clip.items = items || [];
+    renderClips();
+  }
+
+  function renderClips() {
+    document.querySelectorAll('#clipKinds button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.kind === clip.kind)));
+    const list = $('clipList');
+    list.classList.add('scroll');
+    if (st.cfg.clipEnabled === false) {
+      list.innerHTML = '<div class="empty-hint">剪贴板记录已关闭<br>可以在设置里打开</div>';
+    } else if (!clip.items.length) {
+      list.innerHTML = `<div class="empty-hint">${clip.q || clip.kind !== 'all' ? '没有找到' : '还没有记录<br>复制过的文字和图片会出现在这里'}</div>`;
+    } else {
+      list.innerHTML = clip.items.map((it) => {
+        const body = it.type === 'image'
+          ? `<span class="clip-img" style="background-image:url('${it.thumb}')"></span><span class="clip-body"><span class="clip-text">图片 ${it.width}×${it.height}</span><span class="clip-meta"><span>${ago(it.at)}</span>${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>`
+          : `<span class="clip-body"><span class="clip-text">${esc(it.text)}</span><span class="clip-meta"><span>${ago(it.at)}</span>${it.length > 600 ? `<span>${it.length} 字</span>` : ''}${it.note ? `<span class="note">${esc(it.note)}</span>` : ''}</span></span>`;
+        const editing = clip.editing === it.id;
+        return `<div class="clip-row${it.fav ? ' fav' : ''}" role="listitem" data-id="${it.id}">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <button type="button" class="clip-main" data-act="copy" title="点击复制">${body}</button>
+            ${editing ? `<input class="field-input note-input" data-act="note-input" maxlength="200" placeholder="写个备注，回车保存" value="${esc(it.note)}">` : ''}
+          </div>
+          <span class="clip-ops">
+            <button type="button" class="op-btn${it.fav ? ' on' : ''}" data-act="fav" aria-label="${it.fav ? '取消收藏' : '收藏'}">${it.fav ? STAR : STAR_O}</button>
+            <button type="button" class="op-btn" data-act="note" aria-label="备注">${PEN}</button>
+            <button type="button" class="op-btn danger" data-act="del" aria-label="删除">${XMARK}</button>
+          </span>
+        </div>`;
+      }).join('');
+      const ni = list.querySelector('.note-input');
+      if (ni) { ni.focus(); ni.select(); }
+    }
+    $('clipCount').textContent = clip.items.length ? `${clip.items.length} 条${clip.kind === 'all' && !clip.q ? '' : '（筛选后）'}` : '';
+    fitPanel();
+  }
+
+  let clipSearchTimer = null;
+  $('clipSearch').addEventListener('input', () => {
+    clearTimeout(clipSearchTimer);
+    clipSearchTimer = setTimeout(() => { clip.q = $('clipSearch').value; loadClips(); }, 150);
+  });
+  $('clipSearch').addEventListener('keydown', (e) => {
+    // 回车直接复制第一条
+    if (e.key === 'Enter' && clip.items[0]) { e.preventDefault(); copyClip(clip.items[0].id); }
+  });
+  $('clipKinds').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-kind]');
+    if (b) { clip.kind = b.dataset.kind; loadClips(); }
+  });
+  async function copyClip(id) {
+    const ok = await api.clipCopy(id);
+    const row = $('clipList').querySelector(`.clip-row[data-id="${id}"]`);
+    if (ok && row) {
+      row.classList.add('copied');
+      setTimeout(() => row.classList.remove('copied'), 900);
+    }
+  }
+  $('clipList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]');
+    const row = e.target.closest('.clip-row');
+    if (!btn || !row) return;
+    const id = row.dataset.id;
+    const it = clip.items.find((x) => x.id === id);
+    if (!it) return;
+    const act = btn.dataset.act;
+    if (act === 'copy') copyClip(id);
+    else if (act === 'fav') { await api.clipUpdate(id, { fav: !it.fav }); }
+    else if (act === 'note') { clip.editing = clip.editing === id ? null : id; renderClips(); }
+    else if (act === 'del') { await api.clipRemove(id); }
+  });
+  $('clipList').addEventListener('keydown', async (e) => {
+    if (!e.target.matches('.note-input')) return;
+    const id = e.target.closest('.clip-row').dataset.id;
+    if (e.key === 'Enter') { e.preventDefault(); clip.editing = null; await api.clipUpdate(id, { note: e.target.value.trim() }); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); clip.editing = null; renderClips(); }
+  });
+  $('clipClear').addEventListener('click', async () => {
+    const b = $('clipClear');
+    if (Date.now() - clip.clearArmed > 3000) {
+      clip.clearArmed = Date.now();
+      b.textContent = '再点一次确认清空';
+      b.classList.add('warn');
+      setTimeout(() => { b.textContent = '清空（保留收藏）'; b.classList.remove('warn'); }, 3000);
+      return;
+    }
+    clip.clearArmed = 0;
+    b.textContent = '清空（保留收藏）';
+    b.classList.remove('warn');
+    await api.clipClear();
+  });
+
+  // ---------- 待办 ----------
+  const todo = { state: null, view: 'day', key: null, editing: null };
+  let noteTimer = null;
+
+  async function loadTodo() {
+    if (!api.todoGet) return;
+    todo.state = await api.todoGet(todo.view === 'day' ? todo.key : null);
+    renderTodo();
+  }
+
+  function renderTodo() {
+    const s = todo.state;
+    if (!s) return;
+    const page = $('todoPage');
+    page.classList.toggle('history', todo.view === 'history');
+    page.classList.toggle('past', todo.view === 'day' && !s.isToday);
+    $('todoToday').style.display = todo.view === 'history' || !s.isToday ? '' : 'none';
+    $('todoHistory').style.display = todo.view === 'history' ? 'none' : '';
+
+    if (todo.view === 'history') {
+      $('todoDate').textContent = '历史';
+      $('todoStat').textContent = s.archive.length + ' 天';
+      const arch = $('todoArchive');
+      arch.classList.add('scroll');
+      arch.innerHTML = s.archive.length
+        ? s.archive.map((a) => `<button type="button" class="arch-row" role="listitem" data-key="${a.key}"><span>${esc(a.label)}${a.key === s.today ? '（今天）' : ''}</span>${a.hasNote ? '<span class="tag">有笔记</span>' : ''}<span class="cnt num">${a.done}/${a.total}</span><span class="arch-bar"><i style="width:${a.total ? Math.round(a.done / a.total * 100) : 0}%"></i></span></button>`).join('')
+        : '<div class="empty-hint">还没有历史记录</div>';
+      fitPanel();
+      return;
+    }
+
+    const tasks = s.day.tasks;
+    const own = tasks.filter((x) => !x.rolled);
+    $('todoDate').textContent = s.isToday ? '今天 · ' + s.label : s.label;
+    $('todoStat').textContent = own.length ? `${own.filter((x) => x.done).length}/${own.length} 完成` : '';
+    const list = $('todoList');
+    list.classList.add('scroll');
+    if (!tasks.length) {
+      list.innerHTML = `<div class="empty-hint" style="padding:18px 12px">${s.isToday ? '今天还没有待办' : '这天没有待办'}</div>`;
+    } else {
+      list.innerHTML = tasks.map((x, i) => {
+        const cls = `todo-row${x.done ? ' done' : ''}${x.rolled ? ' rolled' : ''}`;
+        const tag = x.rolled ? '<span class="tag">已顺延</span>' : x.from ? `<span class="tag">从 ${esc(x.from.slice(5).replace('-', '/'))} 顺延</span>` : '';
+        const text = todo.editing === x.id
+          ? `<input class="field-input todo-edit" data-act="edit-input" maxlength="300" value="${esc(x.text)}">`
+          : `<span class="todo-text" data-act="edit">${esc(x.text)}${tag}</span>`;
+        return `<div class="${cls}" role="listitem" data-id="${x.id}">
+          <button type="button" class="check" data-act="toggle" aria-label="${x.done ? '标为未完成' : '标为完成'}" ${x.rolled ? 'disabled' : ''}>${TICK}</button>
+          ${text}
+          <span class="todo-ops">
+            ${s.isToday ? `<button type="button" class="op-btn" data-act="up" aria-label="上移" ${i === 0 ? 'disabled' : ''}>${UP}</button>
+            <button type="button" class="op-btn" data-act="down" aria-label="下移" ${i === tasks.length - 1 ? 'disabled' : ''}>${DOWN}</button>` : ''}
+            <button type="button" class="op-btn danger" data-act="del" aria-label="删除">${XMARK}</button>
+          </span>
+        </div>`;
+      }).join('');
+      const ei = list.querySelector('.todo-edit');
+      if (ei) { ei.focus(); ei.setSelectionRange(ei.value.length, ei.value.length); }
+    }
+    const note = $('todoNote');
+    if (document.activeElement !== note) note.value = s.isToday ? s.day.note || '' : '';
+    $('todoNoteView').textContent = !s.isToday ? (s.day.note || '这天没有笔记') : '';
+    fitPanel();
+  }
+
+  $('todoInput').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return; // 输入法选字时的回车不算
+    const v = $('todoInput').value.trim();
+    if (!v) return;
+    e.preventDefault();
+    $('todoInput').value = '';
+    await api.todoAdd(v);
+  });
+  $('todoList').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]');
+    const row = e.target.closest('.todo-row');
+    if (!btn || !row || btn.disabled) return;
+    const id = row.dataset.id, key = todo.state.key;
+    const act = btn.dataset.act;
+    if (act === 'toggle') await api.todoToggle(key, id);
+    else if (act === 'del') await api.todoRemove(key, id);
+    else if (act === 'up') await api.todoMove(key, id, -1);
+    else if (act === 'down') await api.todoMove(key, id, 1);
+    else if (act === 'edit' && todo.state.isToday) { todo.editing = id; renderTodo(); }
+  });
+  $('todoList').addEventListener('keydown', async (e) => {
+    if (!e.target.matches('.todo-edit')) return;
+    const id = e.target.closest('.todo-row').dataset.id;
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); todo.editing = null; await api.todoEdit(todo.state.key, id, e.target.value); renderTodo(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); todo.editing = null; renderTodo(); }
+  });
+  $('todoList').addEventListener('focusout', (e) => {
+    if (e.target.matches('.todo-edit') && todo.editing) {
+      const id = todo.editing;
+      todo.editing = null;
+      api.todoEdit(todo.state.key, id, e.target.value).then(renderTodo);
+    }
+  });
+  $('todoNote').addEventListener('input', () => {
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(() => api.todoNote($('todoNote').value), 500);
+  });
+  $('todoHistory').addEventListener('click', () => { todo.view = 'history'; loadTodo(); });
+  $('todoToday').addEventListener('click', () => { todo.view = 'day'; todo.key = null; loadTodo(); });
+  $('todoArchive').addEventListener('click', (e) => {
+    const b = e.target.closest('.arch-row');
+    if (!b) return;
+    todo.view = 'day';
+    todo.key = b.dataset.key === todo.state.today ? null : b.dataset.key;
+    loadTodo();
+  });
+  $('todoExport').addEventListener('click', async () => {
+    const which = todo.view === 'history' ? 'all' : todo.state.key;
+    const file = await api.todoExport(which);
+    if (file) {
+      const b = $('todoExport');
+      b.textContent = '已导出';
+      setTimeout(() => { b.textContent = '导出 Markdown'; }, 1500);
+    }
+  });
 
   // ---------- 数据 ----------
   function applyAppearance() {
@@ -669,6 +954,19 @@
       if (rotateChanged) startRotation();
     });
     api.onStatus((s) => { st.online = s.online; renderPanel(); });
+    if (api.onPageOpen) {
+      // 全局快捷键唤出：直接打开对应页面，并把光标放进输入框
+      api.onPageOpen((page) => {
+        st.hover = true;
+        openPanel(undefined, page);
+        setTimeout(() => {
+          const el = page === 'clip' ? $('clipSearch') : page === 'todo' ? $('todoInput') : null;
+          if (el) { el.focus(); if (el.select) el.select(); }
+        }, 120);
+      });
+      api.onClipChanged(() => { if (st.open && st.page === 'clip') loadClips(); });
+      api.onTodoChanged(() => { if (st.open && st.page === 'todo') loadTodo(); });
+    }
     if (api.getMedia) {
       onMedia(await api.getMedia());
       api.onMedia(onMedia);
