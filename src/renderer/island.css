@@ -5,6 +5,7 @@
   --muted: #C4C8CE;
   --faint: #A9AEB6;
   --island: rgba(12, 12, 14, 0.9);
+  --island-edge: transparent;
   --spring: cubic-bezier(.32, 1.25, .48, 1);
   --spring-strong: cubic-bezier(.32, 1.4, .48, 1);
 }
@@ -28,9 +29,19 @@ button { font-family: inherit; color: inherit; }
   position: absolute;
   top: 0;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--scale, 1));
+  transform-origin: top center;
+  opacity: var(--opacity, 1);
   padding-bottom: 14px;
+  transition: opacity .3s ease, top .3s ease;
 }
+/* 液态玻璃：底色更透，加一道细亮边 */
+body.glass { --island: rgba(28, 30, 36, 0.5); --island-edge: rgba(255, 255, 255, 0.16); }
+body.glass #morph[data-form="island"], body.glass #morph[data-form="panel"] {
+  box-shadow: inset 0 -1px 0 var(--island-edge), inset 1px 0 0 var(--island-edge), inset -1px 0 0 var(--island-edge), 0 12px 32px rgba(0, 0, 0, .3);
+}
+/* 离开顶边时：上面也是圆角，不需要“耳朵” */
+body.floating .ear { display: none; }
 .ear {
   position: absolute;
   top: 0;

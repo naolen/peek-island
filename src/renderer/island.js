@@ -71,7 +71,7 @@
     else [w, h, r] = SIZES[f];
     morph.style.width = w + 'px';
     morph.style.height = h + 'px';
-    morph.style.borderRadius = `0 0 ${r}px ${r}px`;
+    morph.style.borderRadius = st.cfg.topOffset > 0 ? `${r}px` : `0 0 ${r}px ${r}px`;
     if (f !== 'strip' && typeof st.hot === 'number') st.hot = null;
     if (f === 'panel') st.hot = null;
     renderBubble();
@@ -435,7 +435,18 @@
   hit.addEventListener('mouseleave', () => { st.cross = -1; renderChart(); });
 
   // ---------- 数据 ----------
+  function applyAppearance() {
+    const c = st.cfg;
+    const root = document.documentElement.style;
+    root.setProperty('--scale', String(c.scale));
+    root.setProperty('--opacity', String(c.opacity));
+    document.body.classList.toggle('glass', c.style === 'glass');
+    document.body.classList.toggle('floating', c.topOffset > 0);
+    hot.style.top = c.topOffset + 'px';
+  }
+
   function renderAll() {
+    applyAppearance();
     document.documentElement.style.setProperty('--up', upColor());
     document.documentElement.style.setProperty('--down', downColor());
     renderSegments();

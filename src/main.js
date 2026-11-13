@@ -5,8 +5,9 @@ const { ConfigStore } = require('./config');
 const feed = require('./feed');
 
 // 岛窗口的尺寸要能装下最大的展开面板；没有内容的透明区域会把点击穿透给下面的软件
-const ISLAND_W = 720;
-const ISLAND_H = 660;
+// 按最大缩放 1.2 倍、最大顶部偏移 40px 留足空间
+const ISLAND_W = 760;
+const ISLAND_H = 720;
 
 let store;
 let islandWin = null;

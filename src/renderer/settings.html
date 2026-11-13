@@ -42,6 +42,21 @@
     </section>
 
     <section class="card">
+      <div class="card-title">外观 <span class="hint">调低透明度、缩小一点，别人更难注意到</span></div>
+      <div class="grid">
+        <label class="field">风格
+          <select id="style" class="input">
+            <option value="classic">经典黑</option>
+            <option value="glass">液态玻璃</option>
+          </select>
+        </label>
+        <label class="field">不透明度 <span id="opacityVal" class="num"></span><input id="opacity" type="range" min="0.3" max="1" step="0.05"></label>
+        <label class="field">大小 <span id="scaleVal" class="num"></span><input id="scale" type="range" min="0.8" max="1.2" step="0.05"></label>
+        <label class="field">离顶边距离 <span id="topVal" class="num"></span><input id="topOffset" type="range" min="0" max="40" step="1"></label>
+      </div>
+    </section>
+
+    <section class="card">
       <div class="card-title">显示与快捷键</div>
       <div class="grid">
         <label class="field">平时显示为

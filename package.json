@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win nsis --x64",
+    "dist": "electron-builder --win nsis --x64 --publish never",
     "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots"
   },
   "dependencies": {
@@ -41,6 +41,7 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "shortcutName": "余光"
-    }
+    },
+    "executableName": "PeekIsland"
   }
 }

@@ -16,6 +16,14 @@ const DEFAULTS = {
   // 涨跌幅超过这个值，光带上那一段会“呼吸”
   breatheAbove: 3,
   bossKey: 'Control+Alt+S',
+  // 外观：classic = 经典黑；glass = 液态玻璃（更透）
+  style: 'classic',
+  // 整体不透明度 0.3 ~ 1，越低越不显眼
+  opacity: 1,
+  // 整体大小 0.8 ~ 1.2
+  scale: 1,
+  // 离屏幕顶边的距离（像素），0 = 贴边
+  topOffset: 0,
   activeGroup: 0,
   // 代码使用腾讯行情格式：sh / sz / bj 开头为 A 股，hk 为港股，us 为美股
   groups: [
@@ -37,6 +45,10 @@ function sanitize(cfg) {
   out.collapseDelayMs = clampInt(out.collapseDelayMs, 200, 10000, DEFAULTS.collapseDelayMs);
   out.breatheAbove = typeof out.breatheAbove === 'number' && out.breatheAbove > 0 ? out.breatheAbove : DEFAULTS.breatheAbove;
   if (typeof out.bossKey !== 'string' || !out.bossKey) out.bossKey = DEFAULTS.bossKey;
+  if (!['classic', 'glass'].includes(out.style)) out.style = DEFAULTS.style;
+  out.opacity = clampNum(out.opacity, 0.3, 1, DEFAULTS.opacity);
+  out.scale = clampNum(out.scale, 0.8, 1.2, DEFAULTS.scale);
+  out.topOffset = clampInt(out.topOffset, 0, 40, DEFAULTS.topOffset);
   let groups = Array.isArray(out.groups) ? out.groups : DEFAULTS.groups;
   groups = groups
     .filter(g => g && typeof g.name === 'string')
@@ -54,6 +66,12 @@ function clampInt(v, min, max, dflt) {
   const n = Math.round(Number(v));
   if (!Number.isFinite(n)) return dflt;
   return Math.min(max, Math.max(min, n));
+}
+
+function clampNum(v, min, max, dflt) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return dflt;
+  return Math.min(max, Math.max(min, Math.round(n * 100) / 100));
 }
 
 class ConfigStore {

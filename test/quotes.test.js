@@ -86,3 +86,11 @@ test('sanitize：非法配置回退到默认值', () => {
   assert.deepStrictEqual(c.groups, [{ name: '测试', codes: ['sh600519', 'usNVDA'] }]);
   assert.strictEqual(c.activeGroup, 0);
 });
+
+test('sanitize：外观参数夹在允许范围内', () => {
+  const c = sanitize({ style: 'neon', opacity: 0.1, scale: 3, topOffset: -5 });
+  assert.strictEqual(c.style, 'classic');
+  assert.strictEqual(c.opacity, 0.3);
+  assert.strictEqual(c.scale, 1.2);
+  assert.strictEqual(c.topOffset, 0);
+});
