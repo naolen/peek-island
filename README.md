@@ -137,6 +137,10 @@ scripts/           截图自测用的假数据和脚本
 test/              单元测试
 ```
 
+## 排查问题
+
+运行日志在 `%APPDATA%/peek-island/logs/main.log`（超过 1MB 自动清空），遇到问题时把它发给开发者。
+
 ## 数据来源与隐私
 
 - 行情来自东方财富的公开网页接口（`push2.eastmoney.com`、`push2his.eastmoney.com`、`searchapi.eastmoney.com`），非官方 API，可能有延迟，也可能随时变化。仅供个人查看，不构成任何投资建议。

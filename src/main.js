@@ -37,6 +37,25 @@ let notifyStatus = { status: 'unknown', message: '' };
 // 当前媒体状态；封面只在换歌时由小助手发送，这里缓存起来
 let media = { active: false, available: false };
 
+// 简单的日志：写到 %APPDATA%/peek-island/logs/main.log，排查问题时用
+let logFile = null;
+function log(...args) {
+  const line = new Date().toISOString() + ' ' + args.map((a) => (a instanceof Error ? a.stack : typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+  console.log(line);
+  try {
+    if (!logFile) {
+      const dir = path.join(app.getPath('userData'), 'logs');
+      fs.mkdirSync(dir, { recursive: true });
+      logFile = path.join(dir, 'main.log');
+      // 超过 1MB 就从头写
+      try { if (fs.statSync(logFile).size > 1024 * 1024) fs.writeFileSync(logFile, ''); } catch (e) { /* 文件还不存在 */ }
+    }
+    fs.appendFileSync(logFile, line + '\n');
+  } catch (e) { /* ignore */ }
+}
+process.on('uncaughtException', (e) => log('[uncaught]', e));
+process.on('unhandledRejection', (e) => log('[unhandled]', e));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
@@ -188,7 +207,8 @@ function setIslandFocus(on) {
     islandWin.setFocusable(true);
     islandWin.focus();
   } else if (islandWin.isFocusable()) {
-    islandWin.blur();
+    // 用户点了别的软件时焦点已经过去了，这时不要再动焦点
+    if (islandWin.isFocused()) islandWin.blur();
     islandWin.setFocusable(false);
   }
 }
@@ -270,10 +290,12 @@ function setupNative() {
     // 只有在放歌时才让小助手推送音量峰值
     native.send({ cmd: 'level', on: media.active && media.status === 'playing' });
   });
+  // 小助手发现剪贴板变了（Windows 剪贴板序号变化）
+  native.on('clipboard', () => { if (clipWatcher) clipWatcher.poke(); });
   native.on('level', (l) => {
     if (islandWin && !islandWin.isDestroyed()) islandWin.webContents.send('level', l.peak);
   });
-  native.on('error', (e) => console.warn('[native]', e.message));
+  native.on('error', (e) => log('[native]', e.message));
   native.start();
 }
 
@@ -298,13 +320,14 @@ function setupClips() {
   clips = new ClipStore(path.join(app.getPath('userData'), 'clipboard'), { limit: store.get().clipLimit });
   clipWatcher = new ClipWatcher(clips, {
     onChange: () => broadcast('clip:changed'),
-    getOptions: () => ({ enabled: store.get().clipEnabled, images: store.get().clipImages })
+    getOptions: () => ({ enabled: store.get().clipEnabled, images: store.get().clipImages }),
+    log
   });
   clipWatcher.start();
   ipcMain.handle('clip:list', (_e, q) => clips.query(q || {}).map(clipView));
-  ipcMain.handle('clip:copy', (_e, id) => {
+  ipcMain.handle('clip:copy', async (_e, id) => {
     const it = clips.get(id);
-    const ok = !!it && clipWatcher.copy(it);
+    const ok = !!it && await clipWatcher.copy(it);
     if (ok) broadcast('clip:changed');
     return ok;
   });

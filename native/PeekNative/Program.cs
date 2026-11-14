@@ -3,6 +3,7 @@
 //     {"type":"ready","version":"0.2.0"}
 //     {"type":"media", ...}        见 MediaWatcher
 //     {"type":"level","peak":0.42} 默认输出设备的实时峰值 0..1
+//     {"type":"clipboard","seq":123} 剪贴板内容变了
 //     {"type":"error","message":"..."}
 //   stdin 每行一条 JSON 命令：
 //     {"cmd":"toggle"} / {"cmd":"play"} / {"cmd":"pause"} / {"cmd":"next"} / {"cmd":"prev"}
@@ -46,6 +47,7 @@ internal static class Program
 
         var cts = new CancellationTokenSource();
         _ = Task.Run(() => LevelLoop(cts.Token));
+        _ = Task.Run(() => ClipboardLoop(cts.Token));
 
         string? line;
         while ((line = await Console.In.ReadLineAsync()) != null)
@@ -77,6 +79,25 @@ internal static class Program
 
         cts.Cancel();
         return 0;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetClipboardSequenceNumber();
+
+    // 每 0.25 秒看一眼 Windows 的剪贴板序号（剪贴板每变一次就加一），变了就通知主程序去读
+    private static async Task ClipboardLoop(CancellationToken token)
+    {
+        uint last = GetClipboardSequenceNumber();
+        while (!token.IsCancellationRequested)
+        {
+            try { await Task.Delay(250, token); } catch (TaskCanceledException) { break; }
+            uint seq = GetClipboardSequenceNumber();
+            if (seq != last)
+            {
+                last = seq;
+                Send(new { type = "clipboard", seq });
+            }
+        }
     }
 
     // 约 20 次 / 秒读取峰值；只有变化明显时才发，静音时每秒发一次心跳

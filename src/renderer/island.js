@@ -73,8 +73,10 @@
 
   function islandWidth() { return SIZES.island[0] + (musicActive() ? 76 : 0) + (msg.unread > 0 ? 48 : 0); }
 
+  let lastForm = 'strip', formChangedAt = 0;
   function applyForm() {
     const f = form();
+    if (f !== lastForm) { lastForm = f; formChangedAt = Date.now(); }
     morph.dataset.form = f;
     hot.classList.toggle('has-body', f !== 'strip');
     let w, h, r;
@@ -359,10 +361,13 @@
   function fitPanel() {
     if (form() === 'panel') morph.style.height = panel.offsetHeight + 'px';
   }
-  /** 剪贴板 / 待办页需要打字：这时才让窗口接收键盘焦点，其他时候不抢焦点 */
+  /**
+   * 面板展开时让窗口拿到焦点：这样点到任何别的地方（其他软件、桌面）窗口会失去焦点，面板随之收起；
+   * 剪贴板 / 待办页也需要焦点才能打字。面板收起后立刻还回焦点，平时完全不抢焦点。
+   */
   let focusOn = false;
   function syncFocus() {
-    const want = st.open && INPUT_PAGES.includes(st.page);
+    const want = st.open;
     if (want === focusOn) return;
     focusOn = want;
     api.setFocus(want);
@@ -575,21 +580,42 @@
   document.addEventListener('mousemove', (e) => trackPointer(e.target));
   document.addEventListener('mouseleave', () => trackPointer(null));
 
+  // ---------- 悬停意图：鼠标停够一会儿才弹气泡 ----------
+  // 光带刚长成岛的那一下，鼠标是“被动”落在岛上的，不算悬停；要再停 0.55 秒才弹出
+  const HOVER_DELAY = 550;
+  let intentTimer = null;
+  function hoverIntent(key, delay) {
+    clearTimeout(intentTimer);
+    // 已经有气泡在显示时（比如沿光带滑过几只股票），直接切换，不再等
+    if (st.hot !== null && st.hot !== key && (typeof st.hot === typeof key)) { st.hot = key; applyForm(); return; }
+    intentTimer = setTimeout(function fire() {
+      const settle = 600 - (Date.now() - formChangedAt);
+      if (settle > 0) { intentTimer = setTimeout(fire, settle); return; }
+      st.hot = key;
+      applyForm();
+    }, delay);
+  }
+  function hoverOut(key) {
+    clearTimeout(intentTimer);
+    if (st.hot === key || (key === 'seg' && typeof st.hot === 'number')) { st.hot = null; applyForm(); }
+  }
+  // 光带上的单只股票气泡只在“光带”模式里出现；“自动”模式下光带会直接长成岛
+  const stripBubbles = () => st.cfg && st.cfg.mode === 'strip';
+
   segsEl.addEventListener('mouseover', (e) => {
     const el = e.target.closest('.seg-item');
-    if (!el) return;
-    st.hot = Number(el.dataset.i);
-    applyForm();
+    if (!el || !stripBubbles()) return;
+    hoverIntent(Number(el.dataset.i), 250);
   });
-  segsEl.addEventListener('mouseleave', () => { if (typeof st.hot === 'number') { st.hot = null; applyForm(); } });
+  segsEl.addEventListener('mouseleave', () => hoverOut('seg'));
   segsEl.addEventListener('click', (e) => {
     const el = e.target.closest('.seg-item');
     if (el) openPanel(Number(el.dataset.i));
   });
 
   const tz = $('tickerZone');
-  tz.addEventListener('mouseenter', () => { st.hot = 'ticker'; renderBubble(); });
-  tz.addEventListener('mouseleave', () => { st.hot = null; renderBubble(); });
+  tz.addEventListener('mouseenter', () => hoverIntent('ticker', HOVER_DELAY));
+  tz.addEventListener('mouseleave', () => hoverOut('ticker'));
   tz.addEventListener('click', () => { const n = stocks().length; openPanel(n ? st.tIdx % n : 0); });
 
   // 变形结束后再校正一次气泡位置
@@ -599,12 +625,12 @@
 
   // 音乐：光带上的紫色段、岛上的右半边
   const ms = $('musicSeg');
-  ms.addEventListener('mouseenter', () => { st.hot = 'musicSeg'; applyForm(); });
-  ms.addEventListener('mouseleave', () => { if (st.hot === 'musicSeg') { st.hot = null; applyForm(); } });
+  ms.addEventListener('mouseenter', () => { if (stripBubbles()) hoverIntent('musicSeg', 250); });
+  ms.addEventListener('mouseleave', () => hoverOut('musicSeg'));
   ms.addEventListener('click', () => openPanel(undefined, 'music'));
   const mz = $('musicZone');
-  mz.addEventListener('mouseenter', () => { st.hot = 'musicZone'; renderBubble(); });
-  mz.addEventListener('mouseleave', () => { if (st.hot === 'musicZone') { st.hot = null; renderBubble(); } });
+  mz.addEventListener('mouseenter', () => hoverIntent('musicZone', HOVER_DELAY));
+  mz.addEventListener('mouseleave', () => hoverOut('musicZone'));
   mz.addEventListener('click', () => openPanel(undefined, 'music'));
   $('pageTabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-page]');
@@ -612,12 +638,16 @@
     setPage(b.dataset.page);
     if (b.dataset.page === 'stock') { renderPanel(); refreshSelectedMinute(false); }
   });
-  // Esc 收起；点到别的窗口（本窗口失去焦点）且鼠标不在岛上时收起
+  // Esc 收起；点到别的地方（本窗口失去焦点）时收起
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && st.open) { e.preventDefault(); closePanel(); }
   });
+  let keepOpenOnBlur = false; // 导出文件时会弹出保存对话框，那时不收
   window.addEventListener('blur', () => {
-    if (st.open && INPUT_PAGES.includes(st.page) && !st.inside) { st.hover = false; closePanel(); }
+    if (!st.open || keepOpenOnBlur) return;
+    st.hover = false;
+    clearTimeout(leaveTimer);
+    closePanel();
   });
   $('mPrev').addEventListener('click', () => api.mediaCmd('prev'));
   $('mNext').addEventListener('click', () => api.mediaCmd('next'));
@@ -663,7 +693,10 @@
   // 设置按钮：按当前页面打开对应的设置页
   $('btnSettings').addEventListener('click', () => {
     const map = { stock: 'stock', music: 'music', clip: 'clip', todo: 'todo', msg: msg.kind === 'mail' ? 'mail' : 'notify' };
-    api.openSettings(map[st.page] || 'general');
+    const section = map[st.page] || 'general';
+    st.hover = false;
+    closePanel();
+    api.openSettings(section);
   });
 
   const hit = $('chartHit');
@@ -910,7 +943,9 @@
   });
   $('todoExport').addEventListener('click', async () => {
     const which = todo.view === 'history' ? 'all' : todo.state.key;
-    const file = await api.todoExport(which);
+    keepOpenOnBlur = true;
+    let file = null;
+    try { file = await api.todoExport(which); } finally { keepOpenOnBlur = false; api.setFocus(true); }
     if (file) {
       const b = $('todoExport');
       b.textContent = '已导出';
