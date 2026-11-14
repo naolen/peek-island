@@ -114,7 +114,7 @@ jobs:
           Get-Content release-notes.md -Encoding utf8
       - name: 发布到 Release（打 v* 标签，或手动运行时填了版本号）
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.release || github.ref_name }}
           name: 余光 ${{ inputs.release || github.ref_name }}
