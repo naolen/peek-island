@@ -29,7 +29,7 @@ No pop-up windows, no taskbar button, never steals keyboard focus. Clicks pass s
   - Index strip, trading-session status per market, intraday / 5-day / daily K / weekly K charts with MA5 / MA20 and a crosshair, key stats, order book (A-shares).
   - **Alerts**: price above / below, daily change, 5-minute spikes, limit up / down and limit break. Show a card or just make that segment of the light strip glow.
   - **Positions**: quantity and cost basis, today's and total P&L, HKD / USD converted to CNY.
-  - **Low-profile mode** (`Ctrl + Alt + H`): greyscale, codes instead of names, no amounts. It can turn on automatically on a schedule. The island is also hidden from screen sharing and screenshots.
+  - **Low-profile mode** (`Ctrl + Alt + H`): greyscale, codes instead of names, no amounts. It can turn on automatically on a schedule. You can also hide the island from screen sharing and screenshots (opt-in).
 - **Now playing** for any player that uses Windows media controls (cover art, progress, controls, level meter).
 - **Notifications** from Feishu / Lark, QQ, DingTalk, WeCom, Outlook, Teams and others.
 - **Mail**: generic IMAP with presets for common providers. Inboxes are read-only, and app passwords are encrypted with DPAPI.

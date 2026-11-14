@@ -72,8 +72,9 @@ const DEFAULTS = {
   stealthDays: [1, 2, 3, 4, 5],
   // 省内存模式：关掉 GPU 加速（重启后生效）
   lowMemory: false,
-  // 共享屏幕、截图、录屏时自动隐藏岛（别人看不到，自己照常看得到）
-  hideInCapture: true,
+  // 共享屏幕、截图、录屏时自动隐藏岛（别人看不到，自己照常看得到）。
+  // 默认关：部分 Windows / 显卡上和透明窗口、焦点切换一起用会出问题，确认没问题后再手动打开
+  hideInCapture: false,
   // 低调模式下的不透明度
   stealthOpacity: 0.7,
   // 分组在岛上的显示方式：rotate 轮播 / summary 汇总（涨跌家数 + 平均涨幅）/ pin 固定第一只
@@ -147,7 +148,7 @@ function sanitize(cfg) {
   if (!['amount', 'pct', 'dir'].includes(out.pnlShow)) out.pnlShow = DEFAULTS.pnlShow;
   out.pnlOnIsland = out.pnlOnIsland !== false;
   out.stealth = out.stealth === true;
-  out.hideInCapture = out.hideInCapture !== false;
+  out.hideInCapture = out.hideInCapture === true;
   out.lowMemory = out.lowMemory === true;
   out.stealthSchedule = out.stealthSchedule === true;
   if (typeof out.stealthKey !== 'string') out.stealthKey = DEFAULTS.stealthKey;

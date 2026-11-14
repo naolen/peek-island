@@ -78,7 +78,9 @@ function placeIsland() {
   if (!islandWin) return;
   const d = screen.getPrimaryDisplay();
   const b = d.bounds;
-  islandWin.setBounds({ x: Math.round(b.x + (b.width - ISLAND_W) / 2), y: b.y, width: ISLAND_W, height: ISLAND_H });
+  // 窗口不能比屏幕还高，否则 Windows 会把它挪位置或裁掉
+  const h = Math.min(ISLAND_H, b.height);
+  islandWin.setBounds({ x: Math.round(b.x + (b.width - ISLAND_W) / 2), y: b.y, width: ISLAND_W, height: h });
 }
 
 function createIsland() {
@@ -111,11 +113,32 @@ function createIsland() {
   islandWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   islandWin.setIgnoreMouseEvents(true, { forward: true });
   // 共享屏幕、截图、录屏时看不到岛（Windows 10 2004 及以上）
-  islandWin.setContentProtection(store.get().hideInCapture);
+  if (store.get().hideInCapture) setCapture(true);
   placeIsland();
+  watchRenderer(islandWin, 'island');
   islandWin.loadFile(path.join(__dirname, 'renderer', 'island.html'));
   islandWin.once('ready-to-show', () => { if (!hidden) islandWin.showInactive(); });
   islandWin.on('closed', () => { islandWin = null; });
+}
+
+/** 共享屏幕 / 截图时隐藏岛 */
+function setCapture(on) {
+  try {
+    islandWin.setContentProtection(!!on);
+    log('[capture] content protection', on, islandWin.isContentProtected ? islandWin.isContentProtected() : '');
+  } catch (e) { log('[capture] 设置失败', e); }
+}
+
+/** 界面里的报错也写进日志，方便排查（界面本身看不到控制台） */
+function watchRenderer(win, name) {
+  const wc = win.webContents;
+  wc.on('console-message', (e) => {
+    const lv = e.level !== undefined ? e.level : 0;
+    if (lv === 'error' || lv === 'warning' || lv >= 2) log(`[${name}]`, e.message, e.sourceId ? String(e.sourceId).split('/').pop() + ':' + e.lineNumber : '');
+  });
+  wc.on('render-process-gone', (_e, d) => log(`[${name}] 渲染进程退出`, d && d.reason, d && d.exitCode));
+  wc.on('preload-error', (_e, p, err) => log(`[${name}] preload 出错`, err));
+  wc.on('did-fail-load', (_e, code, desc) => log(`[${name}] 加载失败`, code, desc));
 }
 
 const SETTINGS_SECTIONS = ['general', 'stock', 'alerts', 'holdings', 'stealth', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
@@ -146,6 +169,7 @@ function openSettings(section) {
       spellcheck: false
     }
   });
+  watchRenderer(settingsWin, 'settings');
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
   if (sec) settingsWin.webContents.once('did-finish-load', () => settingsWin && settingsWin.webContents.send('settings:section', sec));
   settingsWin.on('closed', () => { settingsWin = null; });
@@ -359,6 +383,7 @@ function registerShortcuts() {
 /** 岛窗口平时不抢焦点；在剪贴板 / 待办页需要打字时临时允许 */
 function setIslandFocus(on) {
   if (!islandWin || islandWin.isDestroyed()) return;
+  if (process.env.PEEK_DEBUG || store.get().debugLog) log('[focus]', on);
   if (on) {
     islandWin.setFocusable(true);
     islandWin.focus();
@@ -381,7 +406,7 @@ function applyConfig(patch) {
     stealthOverride = null;
     updateStealth();
   }
-  if (islandWin && before.hideInCapture !== cfg.hideInCapture) islandWin.setContentProtection(cfg.hideInCapture);
+  if (islandWin && before.hideInCapture !== cfg.hideInCapture) setCapture(cfg.hideInCapture);
   if (before.fxAuto !== cfg.fxAuto || before.fxUSD !== cfg.fxUSD || before.fxHKD !== cfg.fxHKD) {
     broadcast('fx', currentFx());
     if (cfg.fxAuto) refreshFx(true).catch(() => {});

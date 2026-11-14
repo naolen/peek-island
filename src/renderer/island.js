@@ -3,6 +3,9 @@
   'use strict';
 
   const api = window.peek;
+  // 没捕获的错误打到控制台，主进程会写进 logs/main.log
+  window.addEventListener('error', (e) => console.error('[未捕获]', e.message, (e.filename || '').split('/').pop() + ':' + e.lineno, e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', (e) => console.error('[未处理的 Promise]', e.reason && (e.reason.stack || e.reason)));
   const $ = (id) => document.getElementById(id);
   const hot = $('hot'), morph = $('morph'), segsEl = $('segs'), tickerEl = $('ticker'), panel = $('panel');
   const bubble = $('bubble');
@@ -907,9 +910,12 @@
     st.hot = null;
     st.cross = -1;
     if (typeof sel === 'number') { st.sel = sel; st.selCode = null; }
-    closeSheets();
-    setPage(page || 'stock');
-    renderPanel();
+    // 先把内容画好再变形；某一块画失败也照样展开，错误写进日志
+    try { closeSheets(); } catch (e) { console.error('closeSheets', e && e.stack); }
+    try { setPage(page || 'stock'); } catch (e) { console.error('setPage', e && e.stack); }
+    try { renderPanel(); } catch (e) { console.error('renderPanel', e && e.stack); }
+    hadFocus = document.hasFocus();
+    openedAt = Date.now();
     applyForm();
     syncFocus();
     refreshSelectedMinute(false);
@@ -1068,8 +1074,13 @@
     }
   });
   let keepOpenOnBlur = false; // 导出文件时会弹出保存对话框，那时不收
+  // 只有面板真的拿到过焦点、并且展开超过 0.5 秒后，失去焦点才收起：
+  // 有的 Windows 在窗口刚拿到焦点时会马上把焦点还回去，不加这个判断面板会一闪就没
+  let hadFocus = false, openedAt = 0;
+  window.addEventListener('focus', () => { if (st.open) hadFocus = true; });
   window.addEventListener('blur', () => {
     if (!st.open || keepOpenOnBlur) return;
+    if (!hadFocus || Date.now() - openedAt < 500) { console.warn('[blur] 刚展开就失去焦点，忽略'); return; }
     st.hover = false;
     clearTimeout(leaveTimer);
     closePanel();
@@ -1878,10 +1889,12 @@
     st.cfg = await api.getConfig();
     st.quotes = await api.getQuotes();
     if (api.getSession) {
-      const ses = await api.getSession();
-      st.sessions = ses.sessions || {}; st.source = ses.source;
-      st.stealth = !!(await api.getStealth());
-      st.pnl = (await api.getPnl()) || st.pnl;
+      try {
+        const ses = await api.getSession();
+        st.sessions = ses.sessions || {}; st.source = ses.source;
+        st.stealth = !!(await api.getStealth());
+        st.pnl = (await api.getPnl()) || st.pnl;
+      } catch (e) { console.error('init', e && e.stack); }
     }
     setPage('stock');
     renderAll();
@@ -1893,7 +1906,7 @@
       // 弹窗打开时只更新它自己，不重画整个面板（避免输入框被重建）
       if (st.open && st.page === 'stock') {
         if (sheet.kind === 'alert') { $('asNow').textContent = (() => { const x = quoteOf(sheet.code); return x.price ? '现价 ' + fmtP(x.price) + '  ' + fmtPct(x.pct) : ''; })(); }
-        else if (!sheet.kind) renderPanel();
+        else if (!sheet.kind) { try { renderPanel(); } catch (e) { console.error('renderPanel', e && e.stack); } }
         const s = cur();
         if (st.dview === 'book' && s) loadBook(s.code, true);
       }
