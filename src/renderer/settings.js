@@ -408,5 +408,65 @@
     render();
     $('results').innerHTML = keepResults;
   }
+  // ---------- 左侧菜单 ----------
+  const SECTIONS = ['general', 'stock', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
+  function showSection(name) {
+    if (!SECTIONS.includes(name)) name = 'general';
+    document.querySelectorAll('#navList button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === name)));
+    document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.section === name));
+    $('results').classList.remove('show');
+    try { localStorage.setItem('peek.settings.section', name); } catch (e) { /* ignore */ }
+    document.querySelector('.main').scrollTop = 0;
+  }
+  $('navList').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-section]');
+    if (b) showSection(b.dataset.section);
+  });
+  // 上下方向键在菜单里切换
+  $('navList').addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const btns = Array.from(document.querySelectorAll('#navList button'));
+    const i = btns.indexOf(document.activeElement);
+    if (i < 0) return;
+    const next = btns[(i + (e.key === 'ArrowDown' ? 1 : btns.length - 1)) % btns.length];
+    next.focus();
+    showSection(next.dataset.section);
+    e.preventDefault();
+  });
+
+  // 需要用户处理的地方，在菜单上加个红点
+  function renderNavDots() {
+    const need = {
+      notify: !!(cfg && cfg.notify && notifyStatus && ['denied', 'unspecified'].includes(notifyStatus.status)),
+      mail: Object.values(mail.status || {}).some((s) => s && s.state === 'error'),
+      general: shortcuts.bossKey && shortcuts.bossKey !== 'ok',
+      clip: shortcuts.clipKey && shortcuts.clipKey !== 'ok',
+      todo: shortcuts.todoKey && shortcuts.todoKey !== 'ok'
+    };
+    document.querySelectorAll('#navList button').forEach((b) => {
+      let dot = b.querySelector('.dot');
+      const on = !!need[b.dataset.section];
+      if (on && !dot) { dot = document.createElement('span'); dot.className = 'dot'; dot.setAttribute('aria-label', '需要处理'); b.appendChild(dot); }
+      if (!on && dot) dot.remove();
+    });
+  }
+  setInterval(renderNavDots, 1000);
+
+  // 开机自启、版本号、打开仓库
+  if (api.getLoginItem) {
+    api.getLoginItem().then((on) => { $('loginItem').value = on ? '1' : '0'; });
+    $('loginItem').addEventListener('change', async () => {
+      const on = await api.setLoginItem($('loginItem').value === '1');
+      $('loginItem').value = on ? '1' : '0';
+    });
+  }
+  if (api.appInfo) api.appInfo().then((info) => { $('appVersion').textContent = info.version; });
+  $('openRepo').addEventListener('click', () => api.openLink('https://github.com/naolen/peek-island'));
+  if (api.onSettingsSection) api.onSettingsSection((s) => showSection(s));
+
+  let initial = 'general';
+  try { initial = localStorage.getItem('peek.settings.section') || 'general'; } catch (e) { /* ignore */ }
+  showSection(initial);
+
   init();
 })();

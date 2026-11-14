@@ -660,7 +660,11 @@
     if (b) api.setConfig({ mode: b.dataset.mode });
   });
   $('btnClose').addEventListener('click', closePanel);
-  $('btnSettings').addEventListener('click', () => api.openSettings());
+  // 设置按钮：按当前页面打开对应的设置页
+  $('btnSettings').addEventListener('click', () => {
+    const map = { stock: 'stock', music: 'music', clip: 'clip', todo: 'todo', msg: msg.kind === 'mail' ? 'mail' : 'notify' };
+    api.openSettings(map[st.page] || 'general');
+  });
 
   const hit = $('chartHit');
   hit.addEventListener('mousemove', (e) => {

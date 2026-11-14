@@ -84,12 +84,21 @@ function createIsland() {
   islandWin.on('closed', () => { islandWin = null; });
 }
 
-function openSettings() {
-  if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
+const SETTINGS_SECTIONS = ['general', 'stock', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
+
+/** 打开设置窗口；section 指定直接打开哪一页（比如从岛上的消息页点设置 → 消息通知） */
+function openSettings(section) {
+  const sec = SETTINGS_SECTIONS.includes(section) ? section : null;
+  if (settingsWin) {
+    settingsWin.show();
+    settingsWin.focus();
+    if (sec) settingsWin.webContents.send('settings:section', sec);
+    return;
+  }
   settingsWin = new BrowserWindow({
-    width: 980,
-    height: 680,
-    minWidth: 820,
+    width: 1040,
+    height: 720,
+    minWidth: 880,
     minHeight: 560,
     title: '余光 · 设置',
     backgroundColor: '#15171C',
@@ -103,6 +112,7 @@ function openSettings() {
     }
   });
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
+  if (sec) settingsWin.webContents.once('did-finish-load', () => settingsWin && settingsWin.webContents.send('settings:section', sec));
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
@@ -216,7 +226,7 @@ function buildTray() {
     { label: '红涨绿跌', type: 'checkbox', checked: cfg.redUp, click: (it) => applyConfig({ redUp: it.checked }) },
     { label: '剪贴板历史（' + cfg.clipKey + '）', click: () => summon('clip') },
     { label: '待办与笔记（' + cfg.todoKey + '）', click: () => summon('todo') },
-    { label: '分组与设置…', click: openSettings },
+    { label: '设置…', click: () => openSettings() },
     { label: '开机自动启动', type: 'checkbox', checked: login.openAtLogin, click: (it) => { app.setLoginItemSettings({ openAtLogin: it.checked }); buildTray(); } },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() }
@@ -461,7 +471,14 @@ function setupIpc() {
   ipcMain.on('media:cmd', (_e, cmd) => {
     if (native && ['toggle', 'play', 'pause', 'next', 'prev'].includes(cmd)) native.send({ cmd });
   });
-  ipcMain.on('settings:open', () => openSettings());
+  ipcMain.on('settings:open', (_e, section) => openSettings(section));
+  ipcMain.handle('login:get', () => app.getLoginItemSettings().openAtLogin);
+  ipcMain.handle('login:set', (_e, on) => {
+    app.setLoginItemSettings({ openAtLogin: !!on });
+    buildTray();
+    return app.getLoginItemSettings().openAtLogin;
+  });
+  ipcMain.handle('app:info', () => ({ version: app.getVersion() }));
   ipcMain.on('focus:set', (e, on) => {
     if (BrowserWindow.fromWebContents(e.sender) === islandWin) setIslandFocus(!!on);
   });

@@ -8,142 +8,281 @@
 </head>
 <body>
 <div class="app">
-  <aside class="side">
-    <div class="side-title">我的分组 <span class="hint">滚轮在岛上可切换</span></div>
-    <div id="groupList" class="group-list" role="listbox" aria-label="分组"></div>
-    <button id="addGroup" class="btn-dashed" type="button">＋ 新建分组</button>
-  </aside>
+  <!-- 左侧菜单 -->
+  <nav class="nav" aria-label="设置分类">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>余光 · 设置</div>
+    <div id="navList" class="nav-list" role="tablist" aria-orientation="vertical">
+      <button type="button" role="tab" data-section="general">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        通用
+      </button>
+      <button type="button" role="tab" data-section="stock">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+        行情
+      </button>
+      <button type="button" role="tab" data-section="look">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="3"/><path d="M7 14h10M9 18h6"/></svg>
+        外观
+      </button>
+      <button type="button" role="tab" data-section="music">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        音乐
+      </button>
+      <button type="button" role="tab" data-section="notify">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        消息通知
+      </button>
+      <button type="button" role="tab" data-section="mail">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+        邮箱
+      </button>
+      <button type="button" role="tab" data-section="clip">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>
+        剪贴板
+      </button>
+      <button type="button" role="tab" data-section="todo">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>
+        待办
+      </button>
+      <button type="button" role="tab" data-section="about">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>
+        关于
+      </button>
+    </div>
+    <div class="nav-foot"><span id="saveHint">修改后自动保存</span></div>
+  </nav>
 
   <main class="main">
-    <section class="card">
-      <div class="row">
-        <label for="groupName" class="label">分组名称</label>
-        <input id="groupName" class="input" maxlength="12">
-        <div class="spacer"></div>
-        <button id="moveUp" class="btn" type="button" aria-label="分组上移">上移</button>
-        <button id="moveDown" class="btn" type="button" aria-label="分组下移">下移</button>
-        <button id="delGroup" class="btn danger" type="button">删除分组</button>
-      </div>
-    </section>
 
-    <section class="card grow">
-      <div class="row">
-        <span class="card-title">股票</span>
-        <span class="hint" id="limitHint"></span>
-        <div class="spacer"></div>
-        <div class="search">
-          <label for="search" class="sr-only">添加股票</label>
-          <input id="search" class="input wide" placeholder="代码 / 拼音首字母 / 名称，如 600519、gzmt、腾讯、NVDA" autocomplete="off">
-          <div id="results" class="results" role="listbox" aria-label="搜索结果"></div>
-        </div>
-      </div>
-      <div class="table-head"><span>名称</span><span>代码</span><span class="r">现价</span><span class="r">涨跌幅</span><span></span></div>
-      <div id="stockList" class="stock-list"></div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">外观 <span class="hint">调低透明度、缩小一点，别人更难注意到</span></div>
-      <div class="grid">
-        <label class="field">风格
-          <select id="style" class="input">
-            <option value="classic">经典黑</option>
-            <option value="glass">液态玻璃</option>
-          </select>
-        </label>
-        <label class="field">不透明度 <span id="opacityVal" class="num"></span><input id="opacity" type="range" min="0.3" max="1" step="0.05"></label>
-        <label class="field">大小 <span id="scaleVal" class="num"></span><input id="scale" type="range" min="0.8" max="1.2" step="0.05"></label>
-        <label class="field">离顶边距离 <span id="topVal" class="num"></span><input id="topOffset" type="range" min="0" max="40" step="1"></label>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">系统通知 <span id="notifyStatus" class="hint"></span></div>
-      <div class="grid">
-        <label class="field">读取系统通知
-          <select id="notify" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
-        </label>
-        <label class="field">来通知时
-          <select id="notifyPopup" class="input"><option value="1">岛上弹出卡片</option><option value="0">只亮提示，不弹出</option></select>
-        </label>
-        <label class="field">提醒哪些应用
-          <select id="notifyAll" class="input"><option value="0">常用办公应用 + 下面勾选的</option><option value="1">所有应用（下面可取消）</option></select>
-        </label>
-      </div>
-      <div class="hint">默认提醒：飞书、QQ、钉钉、企业微信、Outlook、Teams 和邮件类应用。下面列出最近发过通知的应用：</div>
-      <div id="notifyApps" class="app-list"></div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">邮箱 <span class="hint">新邮件会在岛上提醒；只读取，不会把邮件标成已读，也不下载附件和图片</span></div>
-      <div id="mailList" class="mail-list"></div>
-      <div id="mailForm" class="mail-form">
-        <div class="grid">
-          <label class="field">邮箱类型
-            <select id="mailPreset" class="input"></select>
-          </label>
-          <label class="field">邮箱地址<input id="mailEmail" class="input" type="email" placeholder="name@qq.com" autocomplete="off"></label>
-          <label class="field">授权码 / 应用专用密码<input id="mailPass" class="input" type="password" autocomplete="new-password" placeholder="不是登录密码"></label>
-          <label class="field custom-only">IMAP 服务器<input id="mailHost" class="input" placeholder="imap.example.com"></label>
-          <label class="field custom-only">端口<input id="mailPort" class="input" type="number" value="993"></label>
-          <label class="field">显示名称（可选）<input id="mailLabel" class="input" maxlength="20" placeholder="例如：工作邮箱"></label>
-        </div>
-        <div id="mailHelp" class="hint"></div>
-        <div class="row">
-          <button id="mailSave" class="btn primary" type="button">测试并保存</button>
-          <button id="mailCancel" class="btn" type="button">取消</button>
-          <span id="mailMsg" class="hint"></span>
-        </div>
-      </div>
-      <button id="mailAdd" class="btn-dashed" type="button">＋ 添加邮箱</button>
-    </section>
-
-    <section class="card">
-      <div class="card-title">剪贴板与待办</div>
-      <div class="grid">
-        <label class="field">记录剪贴板
-          <select id="clipEnabled" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
-        </label>
-        <label class="field">记录图片
-          <select id="clipImages" class="input"><option value="1">记录</option><option value="0">只记文字</option></select>
-        </label>
-        <label class="field">最多保留（条，收藏不计）<input id="clipLimit" class="input" type="number" min="20" max="2000" step="10"></label>
-        <label class="field">唤出剪贴板 <span id="clipKeyStatus" class="key-status"></span><input id="clipKey" class="input" placeholder="Control+Alt+V"></label>
-        <label class="field">唤出待办 <span id="todoKeyStatus" class="key-status"></span><input id="todoKey" class="input" placeholder="Control+Alt+T"></label>
-        <label class="field">没做完的事
-          <select id="todoRollover" class="input"><option value="1">第二天自动顺延</option><option value="0">留在当天</option></select>
-        </label>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-title">显示与快捷键</div>
-      <div class="grid">
-        <label class="field">平时显示为
+    <!-- ===== 通用 ===== -->
+    <section class="page" data-section="general" role="tabpanel">
+      <h1>通用</h1>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">平时显示为<span class="set-desc">鼠标不在岛上时停在哪种形态</span></div>
           <select id="mode" class="input">
             <option value="strip">光带：只有一条细光</option>
             <option value="auto">自动：鼠标靠近时变成岛</option>
             <option value="pinned">常驻：一直显示岛</option>
           </select>
-        </label>
-        <label class="field">涨跌配色
+        </div>
+        <div class="set-row">
+          <div class="set-label">离开后缩回（秒）<span class="set-desc">鼠标离开岛多久后收起</span></div>
+          <input id="collapse" class="input narrow" type="number" min="0.2" max="10" step="0.1">
+        </div>
+        <div class="set-row">
+          <div class="set-label">老板键 <span id="bossKeyStatus" class="key-status"></span><span class="set-desc">一键隐藏 / 显示，例如 Control+Alt+S</span></div>
+          <input id="bossKey" class="input" placeholder="Control+Alt+S">
+        </div>
+        <div class="set-row">
+          <div class="set-label">开机自动启动</div>
+          <select id="loginItem" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 行情 ===== -->
+    <section class="page page-stock" data-section="stock" role="tabpanel">
+      <h1>行情</h1>
+      <div class="stock-layout">
+        <div class="card group-col">
+          <div class="col-title">我的分组 <span class="hint">在岛上滚动滚轮可切换</span></div>
+          <div id="groupList" class="group-list" role="listbox" aria-label="分组"></div>
+          <button id="addGroup" class="btn-dashed" type="button">＋ 新建分组</button>
+        </div>
+        <div class="group-edit">
+          <div class="card">
+            <div class="row">
+              <label for="groupName" class="label">分组名称</label>
+              <input id="groupName" class="input" maxlength="12">
+              <div class="spacer"></div>
+              <button id="moveUp" class="btn" type="button" aria-label="分组上移">上移</button>
+              <button id="moveDown" class="btn" type="button" aria-label="分组下移">下移</button>
+              <button id="delGroup" class="btn danger" type="button">删除分组</button>
+            </div>
+          </div>
+          <div class="card grow">
+            <div class="row">
+              <span class="card-title">股票</span>
+              <span class="hint" id="limitHint"></span>
+            </div>
+            <div class="search">
+              <label for="search" class="sr-only">添加股票</label>
+              <input id="search" class="input wide" placeholder="添加股票：代码 / 拼音首字母 / 名称，如 600519、gzmt、腾讯、NVDA" autocomplete="off">
+              <div id="results" class="results" role="listbox" aria-label="搜索结果"></div>
+            </div>
+            <div class="table-head"><span>名称</span><span>代码</span><span class="r">现价</span><span class="r">涨跌幅</span><span></span></div>
+            <div id="stockList" class="stock-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">行情显示</div>
+        <div class="set-row">
+          <div class="set-label">涨跌配色</div>
           <select id="redUp" class="input">
             <option value="1">红涨绿跌</option>
             <option value="0">绿涨红跌</option>
           </select>
-        </label>
-        <label class="field">行情刷新（秒）<input id="refresh" class="input" type="number" min="1.5" max="60" step="0.5"></label>
-        <label class="field">岛上轮播（秒）<input id="rotate" class="input" type="number" min="1.5" max="60" step="0.5"></label>
-        <label class="field">离开后缩回（秒）<input id="collapse" class="input" type="number" min="0.2" max="10" step="0.1"></label>
-        <label class="field">老板键 <span id="bossKeyStatus" class="key-status"></span><input id="bossKey" class="input" placeholder="Control+Alt+S"></label>
-        <label class="field">正在播放的音乐
+        </div>
+        <div class="set-row">
+          <div class="set-label">行情刷新（秒）<span class="set-desc">数据来自东方财富，间隔太短可能被限制</span></div>
+          <input id="refresh" class="input narrow" type="number" min="1.5" max="60" step="0.5">
+        </div>
+        <div class="set-row">
+          <div class="set-label">岛上轮播（秒）<span class="set-desc">岛上每隔多久换一只股票</span></div>
+          <input id="rotate" class="input narrow" type="number" min="1.5" max="60" step="0.5">
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 外观 ===== -->
+    <section class="page" data-section="look" role="tabpanel">
+      <h1>外观</h1>
+      <p class="page-desc">调低不透明度、缩小一点，别人更难注意到。拖动滑块时岛会实时变化。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">风格</div>
+          <select id="style" class="input">
+            <option value="classic">经典黑</option>
+            <option value="glass">液态玻璃</option>
+          </select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">不透明度</div>
+          <div class="slider"><input id="opacity" type="range" min="0.3" max="1" step="0.05"><span id="opacityVal" class="num"></span></div>
+        </div>
+        <div class="set-row">
+          <div class="set-label">大小</div>
+          <div class="slider"><input id="scale" type="range" min="0.8" max="1.2" step="0.05"><span id="scaleVal" class="num"></span></div>
+        </div>
+        <div class="set-row">
+          <div class="set-label">离顶边距离<span class="set-desc">0 为贴边；大于 0 时变成悬浮的胶囊</span></div>
+          <div class="slider"><input id="topOffset" type="range" min="0" max="40" step="1"><span id="topVal" class="num"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 音乐 ===== -->
+    <section class="page" data-section="music" role="tabpanel">
+      <h1>音乐</h1>
+      <p class="page-desc">QQ 音乐、网易云音乐、酷狗、Spotify、浏览器里的视频等，凡是能用键盘多媒体键控制的播放器，都能在岛上显示封面、歌名和波形，并可以切歌、暂停。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">正在播放的音乐<span class="set-desc">暂停 5 分钟后会自动从岛上收起</span></div>
           <select id="music" class="input">
             <option value="1">在岛上显示</option>
             <option value="0">不显示</option>
           </select>
-        </label>
+        </div>
       </div>
-      <div class="hint" id="saveHint">修改后自动保存</div>
     </section>
+
+    <!-- ===== 消息通知 ===== -->
+    <section class="page" data-section="notify" role="tabpanel">
+      <h1>消息通知 <span id="notifyStatus" class="hint h-hint"></span></h1>
+      <p class="page-desc">读取 Windows 通知中心里的通知，在岛上提醒。通知内容只保存在内存里，退出后清空。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">读取系统通知</div>
+          <select id="notify" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">来通知时</div>
+          <select id="notifyPopup" class="input"><option value="1">岛上弹出卡片</option><option value="0">只亮提示，不弹出</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">提醒哪些应用</div>
+          <select id="notifyAll" class="input"><option value="0">常用办公应用 + 下面勾选的</option><option value="1">所有应用（下面可取消）</option></select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">应用</div>
+        <div class="hint">默认提醒：飞书、QQ、钉钉、企业微信、Outlook、Teams 和邮件类应用。下面列出最近发过通知的应用：</div>
+        <div id="notifyApps" class="app-list"></div>
+      </div>
+    </section>
+
+    <!-- ===== 邮箱 ===== -->
+    <section class="page" data-section="mail" role="tabpanel">
+      <h1>邮箱</h1>
+      <p class="page-desc">新邮件会在岛上提醒。只读取，不会把邮件标成已读，也不下载附件和图片；授权码用 Windows 系统加密保存。</p>
+      <div class="card">
+        <div id="mailList" class="mail-list"></div>
+        <div id="mailForm" class="mail-form">
+          <div class="grid">
+            <label class="field">邮箱类型
+              <select id="mailPreset" class="input"></select>
+            </label>
+            <label class="field">邮箱地址<input id="mailEmail" class="input" type="email" placeholder="name@qq.com" autocomplete="off"></label>
+            <label class="field">授权码 / 应用专用密码<input id="mailPass" class="input" type="password" autocomplete="new-password" placeholder="不是登录密码"></label>
+            <label class="field custom-only">IMAP 服务器<input id="mailHost" class="input" placeholder="imap.example.com"></label>
+            <label class="field custom-only">端口<input id="mailPort" class="input" type="number" value="993"></label>
+            <label class="field">显示名称（可选）<input id="mailLabel" class="input" maxlength="20" placeholder="例如：工作邮箱"></label>
+          </div>
+          <div id="mailHelp" class="hint"></div>
+          <div class="row">
+            <button id="mailSave" class="btn primary" type="button">测试并保存</button>
+            <button id="mailCancel" class="btn" type="button">取消</button>
+            <span id="mailMsg" class="hint"></span>
+          </div>
+        </div>
+        <button id="mailAdd" class="btn-dashed" type="button">＋ 添加邮箱</button>
+      </div>
+    </section>
+
+    <!-- ===== 剪贴板 ===== -->
+    <section class="page" data-section="clip" role="tabpanel">
+      <h1>剪贴板</h1>
+      <p class="page-desc">记录复制过的文字和图片，可以搜索、收藏、加备注，点一条就复制回去。数据只保存在本机。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">记录剪贴板</div>
+          <select id="clipEnabled" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">记录图片</div>
+          <select id="clipImages" class="input"><option value="1">记录</option><option value="0">只记文字</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">最多保留（条）<span class="set-desc">收藏的不计入，也不会被清理</span></div>
+          <input id="clipLimit" class="input narrow" type="number" min="20" max="2000" step="10">
+        </div>
+        <div class="set-row">
+          <div class="set-label">唤出快捷键 <span id="clipKeyStatus" class="key-status"></span><span class="set-desc">例如 Control+Alt+V</span></div>
+          <input id="clipKey" class="input" placeholder="Control+Alt+V">
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 待办 ===== -->
+    <section class="page" data-section="todo" role="tabpanel">
+      <h1>待办</h1>
+      <p class="page-desc">按天记录待办和笔记，历史可以导出成 Markdown。数据只保存在本机。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">没做完的事</div>
+          <select id="todoRollover" class="input"><option value="1">第二天自动顺延</option><option value="0">留在当天</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">唤出快捷键 <span id="todoKeyStatus" class="key-status"></span><span class="set-desc">例如 Control+Alt+T</span></div>
+          <input id="todoKey" class="input" placeholder="Control+Alt+T">
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 关于 ===== -->
+    <section class="page" data-section="about" role="tabpanel">
+      <h1>关于</h1>
+      <div class="card about">
+        <div class="about-head"><span class="brand-mark big" aria-hidden="true"></span><div><div class="about-name">余光 Peek Island</div><div class="hint">版本 <span id="appVersion" class="num"></span></div></div></div>
+        <p>贴在屏幕顶部的“灵动岛”：行情、音乐、消息通知、邮箱、剪贴板、待办。</p>
+        <p class="hint">行情数据来自东方财富公开接口，可能有延迟，仅供个人查看，不构成任何投资建议。</p>
+        <p class="hint">除了行情和你配置的邮箱服务器，余光不向任何地方发送数据。</p>
+        <div class="row"><button id="openRepo" class="btn" type="button">打开 GitHub 仓库</button></div>
+      </div>
+    </section>
+
   </main>
 </div>
 <script src="settings.js"></script>
