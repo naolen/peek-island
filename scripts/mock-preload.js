@@ -46,18 +46,64 @@ const cfg = sanitize({
 });
 const base = { sh600519: ['贵州茅台', 1682.5, 0.84], sz300750: ['宁德时代', 251.36, 2.15], sz002594: ['比亚迪', 318.2, -1.02], sh688981: ['中芯国际', 96.48, 3.67], sh600036: ['招商银行', 42.15, -0.31], hk00700: ['腾讯控股', 512, 1.24], hk03690: ['美团-W', 148.3, -2.4], sh601318: ['中国平安', 56.72, 0.53], usNVDA: ['英伟达', 186.42, 1.88], usAAPL: ['苹果', 241.1, -0.46] };
 const quotes = {};
-for (const [c, [name, price, pct]] of Object.entries(base)) quotes[c] = { code: c, name, symbol: c.slice(2), price, prevClose: price / (1 + pct / 100), pct, change: 0 };
-function minute(code) {
-  const q = quotes[code]; let x = code.length * 977 + code.charCodeAt(2) * 31, v = 0; const raw = [0];
-  for (let i = 1; i < 180; i++) { x = (x * 9301 + 49297) % 233280; v += (x / 233280 - 0.5) * 0.24; raw.push(v); }
-  const d = q.pct - raw[raw.length - 1];
-  let pv = 0, vs = 0;
-  const points = raw.map((r, i) => { const p = q.prevClose * (1 + (r + d * i / (raw.length - 1)) / 100); const vol = 50 + ((i * 37) % 90) + (i < 20 ? 200 : 0); pv += p * vol; vs += vol; const m = 570 + i; return { t: String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), price: p, vol, avg: pv / vs }; });
-  return { prevClose: q.prevClose, points };
+for (const [c, [name, price, pct]] of Object.entries(base)) {
+  const prevClose = price / (1 + pct / 100);
+  quotes[c] = { code: c, name, symbol: c.slice(2), price, prevClose, pct, change: price - prevClose, open: prevClose * 1.002, high: Math.max(price, prevClose) * 1.006, low: Math.min(price, prevClose) * 0.994, volume: 2.6e5, amount: 4.4e9, turnover: 0.21, volRatio: 1.12, time: Date.now() };
+}
+const idx = { sh000001: ['上证指数', 3412.56, 0.45], sz399001: ['深证成指', 10988.2, 0.82], sz399006: ['创业板指', 2286.4, 1.36], giHSI: ['恒生指数', 26120.3, -0.38], giNDX: ['纳斯达克100', 21530.8, 0.91] };
+for (const [c, [name, price, pct]] of Object.entries(idx)) quotes[c] = { code: c, name, price, prevClose: price / (1 + pct / 100), pct, change: 0, open: price, high: price * 1.004, low: price * 0.993, volume: 3.2e8, amount: 4.1e11, time: Date.now() };
+cfg.holdings = sanitize({ holdings: { hk00700: { qty: 200, cost: 452 }, sh601318: { qty: 1000, cost: 48.2 }, sh600519: { qty: 100, cost: 1550 }, hk03690: { qty: 300, cost: 160 } } }).holdings;
+cfg.alerts = sanitize({ alerts: { sh600519: { upOn: true, up: 1700, downOn: true, down: 1650 }, sh688981: { fastOn: true, fast: 2 } } }).alerts;
+const pnl = require('../src/pnl');
+const pnlState = () => ({ fx: { USD: 7.18, HKD: 0.921, auto: true }, groups: cfg.groups.map((g) => pnl.group(g.codes, quotes, cfg.holdings, { USD: 7.18, HKD: 0.921 })), items: Object.fromEntries(Object.keys(cfg.holdings).map((c) => [c, pnl.one(c, quotes[c], cfg.holdings[c], { USD: 7.18, HKD: 0.921 })])) });
+function kline(code, klt) {
+  const q = quotes[code]; let x = code.charCodeAt(3) * 131 + klt, p = q.price * 0.86; const out = [];
+  for (let i = 0; i < 80; i++) {
+    x = (x * 9301 + 49297) % 233280; const r = x / 233280 - 0.48;
+    const open = p, close = p * (1 + r * (klt === 102 ? 0.07 : 0.035));
+    const high = Math.max(open, close) * (1 + (x % 7) / 400), low = Math.min(open, close) * (1 - (x % 5) / 400);
+    const d = new Date(Date.now() - (79 - i) * 86400e3 * (klt === 102 ? 7 : 1.4));
+    out.push({ d: d.toISOString().slice(0, 10), open, close, high, low, vol: 1e5 + (x % 1000) * 300, amount: 0 }); p = close;
+  }
+  const last = out[out.length - 1]; const k = q.price / last.close; for (const b of out.slice(-1)) { b.close *= k; b.high = Math.max(b.high * k, b.close); b.low = Math.min(b.low * k, b.close); }
+  return out;
+}
+function book(code) {
+  const q = quotes[code]; const t = q.price < 50 ? 0.01 : q.price < 500 ? 0.01 : 0.01;
+  return { asks: [5, 4, 3, 2, 1].map((lv) => ({ level: lv, price: q.price + lv * t * (q.price > 500 ? 10 : 1), vol: 20 + lv * 13 })), bids: [1, 2, 3, 4, 5].map((lv) => ({ level: lv, price: q.price - lv * t * (q.price > 500 ? 10 : 1) + t, vol: 31 + lv * 9 })) };
+}
+const lis = { stealth: [], alert: [], pnl: [], session: [] };
+function minute(code, ndays) {
+  const q = quotes[code]; let x = code.length * 977 + code.charCodeAt(2) * 31, v = 0;
+  const days = ndays === 5 ? ['2026-11-07', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'] : ['2026-11-13'];
+  const points = [];
+  days.forEach((day, di) => {
+    const n = di === days.length - 1 ? 180 : 241;
+    let pv = 0, vs = 0;
+    for (let i = 0; i < n; i++) {
+      x = (x * 9301 + 49297) % 233280; v += (x / 233280 - 0.5) * 0.24;
+      const p = q.prevClose * (1 + (v + (ndays === 5 ? 0 : q.pct * i / 180) - (ndays === 5 ? 0 : 0)) / 100);
+      const vol = 50 + ((i * 37) % 90) + (i < 20 ? 200 : 0); pv += p * vol; vs += vol;
+      const m = 570 + (i > 120 ? i + 90 : i);
+      points.push({ t: String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'), d: day, price: p, vol, avg: pv / vs });
+    }
+  });
+  return { date: days[days.length - 1], days, prevClose: q.prevClose, points };
 }
 contextBridge.exposeInMainWorld('peek', {
   getConfig: async () => cfg, setConfig: async (p) => Object.assign(cfg, p), getQuotes: async () => quotes,
-  getMinute: async (c) => minute(c), search: async () => [], setIgnoreMouse: () => {}, openSettings: () => {},
+  getMinute: async (c, n) => minute(c, n), search: async () => [],
+  getKline: async (c, klt) => kline(c, klt), getBook: async (c) => book(c),
+  getSession: async () => ({ sessions: { a: { state: 'trading', label: '', active: true }, hk: { state: 'lunch', label: '午休', active: false }, us: { state: 'closed', label: '收盘', active: false } }, source: 'eastmoney' }),
+  onSession: (cb) => lis.session.push(cb),
+  getStealth: async () => false, toggleStealth: () => {}, onStealth: (cb) => lis.stealth.push(cb),
+  getFx: async () => ({ USD: 7.18, HKD: 0.921, auto: true }), onFx: () => {},
+  getPnl: async () => pnlState(), onPnl: (cb) => lis.pnl.push(cb),
+  onAlert: (cb) => lis.alert.push(cb), describeAlert: async () => '', copyText: async () => true,
+  exportGroups: async () => ({ ok: false }), importGroups: async () => ({ ok: false }),
+  memory: async () => ({ totalMB: 214, processes: 5, gpu: 48, native: 22 }),
+  __mockStealth: (on) => lis.stealth.forEach((f) => f(on)),
+  __mockAlert: (ev) => lis.alert.forEach((f) => f(ev)), setIgnoreMouse: () => {}, openSettings: () => {},
   onQuotes: () => {}, onConfig: () => {}, onStatus: () => {},
   getMedia: async () => ({ active: true, available: true, app: 'QQMusic.exe', title: '夜航（示例）', artist: '示例歌手', album: '示例专辑', status: 'playing', position: 52, duration: 214, updatedAt: Date.now(), receivedAt: Date.now(), canPrev: true, canNext: true, thumb: '' }),
   mediaCmd: () => {},

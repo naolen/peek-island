@@ -20,6 +20,18 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
         行情
       </button>
+      <button type="button" role="tab" data-section="alerts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18.4 5.6l-2.1 2.1M21 12h-3"/><circle cx="12" cy="14" r="5"/><path d="M12 12v2l1.5 1.5"/></svg>
+        预警
+      </button>
+      <button type="button" role="tab" data-section="holdings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M16 12h2M3 10h18M8 6V4h8v2"/></svg>
+        持仓
+      </button>
+      <button type="button" role="tab" data-section="stealth">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 9 6 9 6a17 17 0 0 1-2.6 3.2M6.4 7.4C4.3 8.9 3 12 3 12s4 6 9 6a8.7 8.7 0 0 0 4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+        低调模式
+      </button>
       <button type="button" role="tab" data-section="look">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="3"/><path d="M7 14h10M9 18h6"/></svg>
         外观
@@ -75,6 +87,10 @@
           <input id="bossKey" class="input" placeholder="Control+Alt+S">
         </div>
         <div class="set-row">
+          <div class="set-label">省内存模式<span class="set-desc">关掉 GPU 加速，少一个进程，能省几十到上百 MB；毛玻璃效果会没那么顺滑。重启余光后生效</span></div>
+          <select id="lowMemory" class="input"><option value="0">关闭</option><option value="1">开启</option></select>
+        </div>
+        <div class="set-row">
           <div class="set-label">开机自动启动</div>
           <select id="loginItem" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
         </div>
@@ -89,6 +105,11 @@
           <div class="col-title">我的分组 <span class="hint">在岛上滚动滚轮可切换</span></div>
           <div id="groupList" class="group-list" role="listbox" aria-label="分组"></div>
           <button id="addGroup" class="btn-dashed" type="button">＋ 新建分组</button>
+          <div class="io-row">
+            <button id="exportGroups" class="btn small" type="button">导出</button>
+            <button id="importGroups" class="btn small" type="button" title="同名分组会合并，其他追加">导入…</button>
+          </div>
+          <div id="ioHint" class="hint io-hint"></div>
         </div>
         <div class="group-edit">
           <div class="card">
@@ -111,7 +132,7 @@
               <input id="search" class="input wide" placeholder="添加股票：代码 / 拼音首字母 / 名称，如 600519、gzmt、腾讯、NVDA" autocomplete="off">
               <div id="results" class="results" role="listbox" aria-label="搜索结果"></div>
             </div>
-            <div class="table-head"><span>名称</span><span>代码</span><span class="r">现价</span><span class="r">涨跌幅</span><span></span></div>
+            <div class="table-head"><span></span><span>名称</span><span>代码</span><span class="r">现价</span><span class="r">涨跌幅</span><span></span></div>
             <div id="stockList" class="stock-list"></div>
           </div>
         </div>
@@ -132,6 +153,125 @@
         <div class="set-row">
           <div class="set-label">岛上轮播（秒）<span class="set-desc">岛上每隔多久换一只股票</span></div>
           <input id="rotate" class="input narrow" type="number" min="1.5" max="60" step="0.5">
+        </div>
+        <div class="set-row">
+          <div class="set-label">分组在岛上怎么显示</div>
+          <select id="groupDisplay" class="input">
+            <option value="rotate">轮播：一只一只换</option>
+            <option value="summary">汇总：涨跌家数和平均涨幅</option>
+            <option value="pin">固定：只显示第一只</option>
+          </select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">不在交易时间时（分钟）<span class="set-desc">所有市场都休市时，多久刷新一次，省流量和电</span></div>
+          <input id="idleRefresh" class="input narrow" type="number" min="0.5" max="60" step="0.5">
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">面板顶部的指数 <span class="hint">最多 6 个，点一下可以在图里看</span></div>
+        <div id="indexPick" class="pick-grid"></div>
+      </div>
+    </section>
+
+    <!-- ===== 预警 ===== -->
+    <section class="page" data-section="alerts" role="tabpanel">
+      <h1>预警</h1>
+      <p class="page-desc">在岛上展开面板，点股票名称旁边的「预警」，或者右键一只股票来设置。这里列出所有设置过的。</p>
+      <div class="card">
+        <div class="card-title">已设置的预警</div>
+        <div id="alertList" class="alert-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">提醒</div>
+        <div class="set-row">
+          <div class="set-label">卡片停留（秒）<span class="set-desc">预警弹出的卡片多久后收起；鼠标停在上面时不收</span></div>
+          <input id="alertCard" class="input narrow" type="number" min="2" max="30" step="1">
+        </div>
+        <div class="set-row">
+          <div class="set-label">什么时候判断<span class="set-desc">只在这只股票的市场交易时判断，收盘后、午休时不会误报</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 持仓 ===== -->
+    <section class="page" data-section="holdings" role="tabpanel">
+      <h1>持仓</h1>
+      <p class="page-desc">填上股数和成本，岛上就能显示今天赚了多少。只保存在这台电脑上。</p>
+      <div class="card">
+        <div class="row"><span class="card-title">我的持仓</span><span class="spacer"></span><span id="holdTotal" class="hint num"></span></div>
+        <div class="hold-head"><span>名称</span><span>代码</span><span class="r">股数</span><span class="r">成本价</span><span class="r">现价</span><span class="r">今日盈亏</span><span class="r">持仓盈亏</span><span></span></div>
+        <div id="holdList" class="hold-list"></div>
+        <div class="row"><select id="holdAdd" class="input"><option value="">＋ 从分组里添加一只…</option></select></div>
+      </div>
+      <div class="card">
+        <div class="card-title">显示</div>
+        <div class="set-row">
+          <div class="set-label">在岛上显示本组今日盈亏<span class="set-desc">显示在岛的右侧，代替分组名</span></div>
+          <select id="pnlOnIsland" class="input"><option value="1">显示</option><option value="0">不显示</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">盈亏显示为</div>
+          <select id="pnlShow" class="input">
+            <option value="amount">金额：+1,260</option>
+            <option value="pct">百分比：+0.85%</option>
+            <option value="dir">只显示方向：▲ / ▼</option>
+          </select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">汇率 <span class="hint">港股、美股按汇率折成人民币后汇总</span></div>
+        <div class="set-row">
+          <div class="set-label">自动获取汇率<span id="fxNow" class="set-desc num"></span></div>
+          <select id="fxAuto" class="input"><option value="1">自动（取不到时用下面的数）</option><option value="0">手动</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">1 港币 =（人民币）</div>
+          <input id="fxHKD" class="input narrow" type="number" min="0.1" max="3" step="0.001">
+        </div>
+        <div class="set-row">
+          <div class="set-label">1 美元 =（人民币）</div>
+          <input id="fxUSD" class="input narrow" type="number" min="1" max="20" step="0.001">
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 低调模式 ===== -->
+    <section class="page" data-section="stealth" role="tabpanel">
+      <h1>低调模式</h1>
+      <p class="page-desc">不用红绿色、名称换成代码、不显示金额，光带变细变灰。别人路过看到的只是一条不起眼的灰线。</p>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">低调模式<span id="stealthNow" class="set-desc"></span></div>
+          <select id="stealth" class="input"><option value="0">关闭</option><option value="1">一直开启</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">快捷键 <span id="stealthKeyStatus" class="key-status"></span><span class="set-desc">随时切换，例如 Control+Alt+H</span></div>
+          <input id="stealthKey" class="input" placeholder="Control+Alt+H">
+        </div>
+        <div class="set-row">
+          <div class="set-label">低调时的不透明度</div>
+          <div class="slider"><input id="stealthOpacity" type="range" min="0.3" max="1" step="0.05"><span id="stealthOpacityVal" class="num"></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">按时间自动开启</div>
+        <div class="set-row">
+          <div class="set-label">定时<span class="set-desc">比如上班时间自动低调；手动切换后，到下一个时间点再按时间表来</span></div>
+          <select id="stealthSchedule" class="input"><option value="0">关闭</option><option value="1">开启</option></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">时间段<span class="set-desc">结束早于开始时表示跨午夜</span></div>
+          <div class="row"><input id="stealthStart" class="input" type="time"><span class="hint">到</span><input id="stealthEnd" class="input" type="time"></div>
+        </div>
+        <div class="set-row">
+          <div class="set-label">哪几天</div>
+          <div id="stealthDays" class="days"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="set-row">
+          <div class="set-label">共享屏幕、截图时隐藏<span class="set-desc">开会投屏、录屏、截图时别人看不到岛，你自己照常能看到（需要 Windows 10 2004 或更新）</span></div>
+          <select id="hideInCapture" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
         </div>
       </div>
     </section>
@@ -279,6 +419,7 @@
         <p>贴在屏幕顶部的“灵动岛”：行情、音乐、消息通知、邮箱、剪贴板、待办。</p>
         <p class="hint">行情数据来自东方财富公开接口，可能有延迟，仅供个人查看，不构成任何投资建议。</p>
         <p class="hint">除了行情和你配置的邮箱服务器，余光不向任何地方发送数据。</p>
+        <p class="hint">当前占用内存：<span id="memNow" class="num">--</span></p>
         <div class="row"><button id="openRepo" class="btn" type="button">打开 GitHub 仓库</button></div>
       </div>
     </section>

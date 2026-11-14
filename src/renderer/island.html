@@ -55,12 +55,13 @@
       <div class="panel-head">
         <div id="pageTabs" class="pages" role="tablist" aria-label="页面">
           <span class="pages-thumb" aria-hidden="true"></span>
-          <button type="button" role="tab" data-page="stock"><i class="pdot" style="background:#FF8A7A"></i>行情</button>
-          <button type="button" role="tab" data-page="music"><i class="pdot" style="background:#A98BFF"></i>音乐</button>
-          <button type="button" role="tab" data-page="clip"><i class="pdot" style="background:#6BD3C8"></i>剪贴板</button>
-          <button type="button" role="tab" data-page="todo"><i class="pdot" style="background:#FFC26B"></i>待办</button>
-          <button type="button" role="tab" data-page="msg"><i class="pdot" style="background:#5B8CFF"></i>消息<span id="tabMsgCount" class="num badge tab-badge"></span></button>
+          <button type="button" role="tab" data-page="stock" aria-label="行情"><i class="pdot" style="background:#FF8A7A"></i><span class="pname">行情</span></button>
+          <button type="button" role="tab" data-page="music" aria-label="音乐"><i class="pdot" style="background:#A98BFF"></i><span class="pname">音乐</span></button>
+          <button type="button" role="tab" data-page="clip" aria-label="剪贴板"><i class="pdot" style="background:#6BD3C8"></i><span class="pname">剪贴板</span></button>
+          <button type="button" role="tab" data-page="todo" aria-label="待办"><i class="pdot" style="background:#FFC26B"></i><span class="pname">待办</span></button>
+          <button type="button" role="tab" data-page="msg" aria-label="消息"><i class="pdot" style="background:#5B8CFF"></i><span class="pname">消息</span><span id="tabMsgCount" class="num badge tab-badge"></span></button>
         </div>
+        <span id="pageTitle" class="page-title">行情</span>
         <div class="spacer"></div>
         <div id="modeSeg" class="seg" role="radiogroup" aria-label="平时显示为">
           <span class="seg-thumb" aria-hidden="true"></span>
@@ -77,34 +78,120 @@
       </div>
 
       <div id="panelBody" class="fade page-stock">
-        <div id="groupTabs" class="tabs" role="tablist" aria-label="分组"></div>
+        <!-- 指数条：点一下在下面的图里看这个指数 -->
+        <div id="idxRow" class="idx-row" role="list" aria-label="指数"></div>
+        <div class="group-row">
+          <div id="groupTabs" class="tabs" role="tablist" aria-label="分组"></div>
+          <span id="sessionChip" class="session-chip" role="status"></span>
+        </div>
         <div class="info">
           <div class="info-name">
             <span id="curName"></span>
             <span id="curSub" class="num sub"></span>
           </div>
+          <button id="btnAlert" class="alert-pill" type="button" aria-label="预警">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+            <span id="alertCnt">预警</span>
+          </button>
           <span id="curPrice" class="num big"></span>
           <span id="curPct" class="num pill"></span>
         </div>
+        <div id="holdLine" class="hold-line num"></div>
 
+        <div class="chart-bar">
+          <div id="chartTabs" class="mini-seg" role="tablist" aria-label="图表">
+            <button type="button" role="tab" data-view="min1" aria-selected="true">分时</button>
+            <button type="button" role="tab" data-view="min5" aria-selected="false">五日</button>
+            <button type="button" role="tab" data-view="day" aria-selected="false">日K</button>
+            <button type="button" role="tab" data-view="week" aria-selected="false">周K</button>
+          </div>
+          <span class="spacer"></span>
+          <span id="legend" class="num legend"></span>
+        </div>
         <div id="chart" class="chart">
-          <svg id="chartSvg" width="564" height="190" viewBox="0 0 564 190" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <svg id="chartSvg" width="564" height="170" viewBox="0 0 564 170" preserveAspectRatio="none" aria-hidden="true"></svg>
           <span id="axHi" class="num ax ax-tl"></span>
           <span id="axMid" class="num ax ax-ml"></span>
           <span id="axLo" class="num ax ax-bl"></span>
           <span id="axHiP" class="num ax ax-tr"></span>
           <span id="axLoP" class="num ax ax-br"></span>
-          <span class="ax ax-mr avg-legend"><i></i>均价</span>
           <span id="crossLine" class="cross-line" aria-hidden="true"></span>
           <span id="crossDot" class="cross-dot" aria-hidden="true"></span>
           <div id="chartEmpty" class="chart-empty">加载中…</div>
           <div id="chartHit" class="chart-hit"></div>
         </div>
-        <svg id="volSvg" width="564" height="36" viewBox="0 0 564 36" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <svg id="volSvg" width="564" height="30" viewBox="0 0 564 30" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div id="timeAxis" class="num time-axis"></div>
+
+        <!-- 数据 / 五档 / 持仓 -->
+        <div class="data-box">
+          <div id="dataTabs" class="data-tabs" role="tablist" aria-label="详情">
+            <button type="button" role="tab" data-d="data" aria-selected="true">数据</button>
+            <button type="button" role="tab" data-d="book" aria-selected="false">五档</button>
+            <button type="button" role="tab" data-d="hold" aria-selected="false">本组持仓</button>
+          </div>
+          <div id="dataView" class="data-view"></div>
+        </div>
 
         <div id="chips" class="chips"></div>
       </div>
+
+      <!-- 预警设置（盖在行情页上） -->
+      <div id="alertSheet" class="sheet" role="dialog" aria-label="设置预警">
+        <div class="sheet-head">
+          <span id="asTitle" class="sheet-title"></span>
+          <span id="asNow" class="num sub"></span>
+          <span class="spacer"></span>
+          <button id="asClose" class="icon-btn" type="button" aria-label="关闭">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div id="asRules" class="rules"></div>
+        <div class="rule-opts">
+          <span class="opt-label">提醒方式</span>
+          <div id="asNotify" class="mini-seg" role="radiogroup" aria-label="提醒方式">
+            <button type="button" role="radio" data-v="card">弹出卡片</button>
+            <button type="button" role="radio" data-v="strip">只闪光带</button>
+          </div>
+          <span class="opt-label">触发后</span>
+          <div id="asRepeat" class="mini-seg" role="radiogroup" aria-label="触发后">
+            <button type="button" role="radio" data-v="once">提醒一次</button>
+            <button type="button" role="radio" data-v="daily">每天一次</button>
+            <button type="button" role="radio" data-v="every">每次</button>
+          </div>
+        </div>
+        <div class="sheet-foot">
+          <button id="asDelete" class="link-btn danger" type="button">删除这只的预警</button>
+          <span class="spacer"></span>
+          <button id="asCancel" class="btn" type="button">取消</button>
+          <button id="asSave" class="btn primary" type="button">保存</button>
+        </div>
+      </div>
+
+      <!-- 持仓编辑 -->
+      <div id="holdSheet" class="sheet" role="dialog" aria-label="编辑持仓">
+        <div class="sheet-head">
+          <span id="hsTitle" class="sheet-title"></span>
+          <span class="spacer"></span>
+          <button id="hsClose" class="icon-btn" type="button" aria-label="关闭">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="hold-form">
+          <label class="field"><span>持股数量</span><input id="hsQty" class="field-input num" inputmode="decimal" placeholder="例如 200"></label>
+          <label class="field"><span>成本价（<span id="hsCur">元</span>）</span><input id="hsCost" class="field-input num" inputmode="decimal" placeholder="可以不填"></label>
+        </div>
+        <div id="hsPreview" class="hold-preview num"></div>
+        <div class="sheet-foot">
+          <button id="hsDelete" class="link-btn danger" type="button">清除持仓</button>
+          <span class="spacer"></span>
+          <button id="hsCancel" class="btn" type="button">取消</button>
+          <button id="hsSave" class="btn primary" type="button">保存</button>
+        </div>
+      </div>
+
+      <!-- 右键菜单 -->
+      <div id="ctxMenu" class="ctx-menu" role="menu"></div>
 
       <!-- 音乐页 -->
       <div id="musicPage" class="music-page">
@@ -184,6 +271,7 @@
             <button type="button" role="radio" data-kind="all" aria-checked="true">全部</button>
             <button type="button" role="radio" data-kind="notify" aria-checked="false">通知</button>
             <button type="button" role="radio" data-kind="mail" aria-checked="false">邮件</button>
+            <button type="button" role="radio" data-kind="alert" aria-checked="false">预警</button>
           </div>
           <span class="spacer"></span>
           <button id="msgReadAll" class="link-btn" type="button">全部已读</button>

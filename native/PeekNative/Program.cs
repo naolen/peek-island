@@ -9,6 +9,7 @@
 //     {"cmd":"toggle"} / {"cmd":"play"} / {"cmd":"pause"} / {"cmd":"next"} / {"cmd":"prev"}
 //     {"cmd":"level","on":true}    打开 / 关闭峰值推送（没放歌时关掉，省电）
 //     {"cmd":"notify","on":true}   开始 / 停止读取系统通知（见 NotificationWatcher）
+//     {"cmd":"mem"}                回报自己的内存占用 {"type":"mem","kb":...}
 // stdin 关闭（主程序退出）时自动退出。
 using System.Text;
 using System.Text.Json;
@@ -67,6 +68,13 @@ internal static class Program
                 {
                     bool enable = root.TryGetProperty("on", out var on) && on.GetBoolean();
                     if (enable) await notifications.StartAsync(); else notifications.Stop();
+                    continue;
+                }
+                if (cmd == "mem")
+                {
+                    // 主程序关于页用：报告自己占了多少内存
+                    using var me = System.Diagnostics.Process.GetCurrentProcess();
+                    Send(new { type = "mem", kb = me.WorkingSet64 / 1024 });
                     continue;
                 }
                 if (cmd != null) await media.CommandAsync(cmd);

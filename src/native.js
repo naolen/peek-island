@@ -54,6 +54,17 @@ class NativeHelper extends EventEmitter {
     try { this.proc.stdin.write(JSON.stringify(obj) + '\n'); } catch (e) { /* ignore */ }
   }
 
+  /** 问小助手占了多少内存（KB），1 秒内没回就当 0 */
+  memoryKb() {
+    if (!this.proc) return Promise.resolve(0);
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { this.off('mem', on); resolve(0); }, 1000);
+      const on = (m) => { clearTimeout(t); resolve(Number(m.kb) || 0); };
+      this.once('mem', on);
+      this.send({ cmd: 'mem' });
+    });
+  }
+
   stop() {
     this.stopping = true;
     clearTimeout(this.timer);

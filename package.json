@@ -1,6 +1,6 @@
 {
   "name": "peek-island",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "余光：贴在 Windows 屏幕顶部的光带 / 灵动岛式盯盘工具",
   "main": "src/main.js",
   "author": "naolen",

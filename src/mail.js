@@ -3,8 +3,10 @@
 // - 不下载附件、不加载远程图片
 // - 授权码不在这里保存，由调用方（主进程）用系统加密存储后传进来
 const { EventEmitter } = require('events');
-const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
+// imapflow + mailparser 加起来近 30 MB，没配邮箱的人用不到，第一次用时才加载
+let imapflowMod = null, mailparserMod = null;
+const ImapFlowCls = () => (imapflowMod || (imapflowMod = require('imapflow'))).ImapFlow;
+const simpleParser = (...args) => (mailparserMod || (mailparserMod = require('mailparser'))).simpleParser(...args);
 const { explainError, htmlToText } = require('./mailpresets');
 
 const RECENT = 20;           // 连上时取最近多少封显示在列表里
@@ -45,7 +47,7 @@ class MailAccount extends EventEmitter {
 
   makeClient() {
     const a = this.account;
-    return new ImapFlow({
+    return new (ImapFlowCls())({
       host: a.host,
       port: a.port,
       secure: a.secure,

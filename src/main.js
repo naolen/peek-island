@@ -1,7 +1,11 @@
 // 主进程：顶部透明置顶窗口、托盘、老板键、行情轮询。
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, globalShortcut, nativeImage, shell, dialog } = require('electron');
 const path = require('path');
-const { ConfigStore } = require('./config');
+const { ConfigStore, inStealthSchedule, exportGroups, parseImport } = require('./config');
+const alerts = require('./alerts');
+const pnl = require('./pnl');
+const { sessionOf, partsIn } = require('./session');
+const { marketOf } = require('./quotes');
 const feed = require('./feed');
 const { NativeHelper } = require('./native');
 const { ClipStore } = require('./clipstore');
@@ -16,7 +20,7 @@ const fs = require('fs');
 // 岛窗口的尺寸要能装下最大的展开面板；没有内容的透明区域会把点击穿透给下面的软件
 // 按最大缩放 1.2 倍、最大顶部偏移 40px 留足空间
 const ISLAND_W = 760;
-const ISLAND_H = 720;
+const ISLAND_H = 900;
 
 let store;
 let islandWin = null;
@@ -60,6 +64,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
+// 配置在 ready 之前就要读：省内存模式要在 ready 之前关掉 GPU 加速
+store = new ConfigStore(app.getPath('userData'));
+if (store.get().lowMemory) {
+  app.disableHardwareAcceleration();
+}
+// 用不到的 Chromium 功能关掉，少占一点内存
+app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess,BackForwardCache,MediaRouter,Translate');
+
 app.on('second-instance', () => openSettings());
 
 function placeIsland() {
@@ -91,19 +103,22 @@ function createIsland() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: false,
       backgroundThrottling: false
     }
   });
   islandWin.setAlwaysOnTop(true, 'screen-saver');
   islandWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   islandWin.setIgnoreMouseEvents(true, { forward: true });
+  // 共享屏幕、截图、录屏时看不到岛（Windows 10 2004 及以上）
+  islandWin.setContentProtection(store.get().hideInCapture);
   placeIsland();
   islandWin.loadFile(path.join(__dirname, 'renderer', 'island.html'));
   islandWin.once('ready-to-show', () => { if (!hidden) islandWin.showInactive(); });
   islandWin.on('closed', () => { islandWin = null; });
 }
 
-const SETTINGS_SECTIONS = ['general', 'stock', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
+const SETTINGS_SECTIONS = ['general', 'stock', 'alerts', 'holdings', 'stealth', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
 
 /** 打开设置窗口；section 指定直接打开哪一页（比如从岛上的消息页点设置 → 消息通知） */
 function openSettings(section) {
@@ -127,7 +142,8 @@ function openSettings(section) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      spellcheck: false
     }
   });
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
@@ -143,21 +159,160 @@ function broadcast(channel, payload) {
 
 function allCodes() {
   const set = new Set();
-  for (const g of store.get().groups) for (const c of g.codes) set.add(c);
+  const cfg = store.get();
+  for (const g of cfg.groups) for (const c of g.codes) set.add(c);
+  for (const c of cfg.indexes) set.add(c);
+  for (const c of Object.keys(cfg.alerts)) set.add(c);
+  for (const c of Object.keys(cfg.holdings)) set.add(c);
   return Array.from(set);
+}
+
+// 每个市场现在处于什么时段（a / hk / us），随报价一起发给岛
+let sessions = {};
+function computeSessions() {
+  const now = new Date();
+  const latest = {};
+  for (const q of Object.values(lastQuotes)) {
+    if (!q || !q.time || /^fx/.test(q.code)) continue;
+    const m = marketOf(q.code);
+    if (!latest[m] || q.time > latest[m]) latest[m] = q.time;
+  }
+  const out = {};
+  const used = new Set(allCodes().map(marketOf));
+  for (const m of ['a', 'hk', 'us']) {
+    if (!used.has(m)) continue;
+    out[m] = sessionOf(m, now, latest[m] || 0);
+  }
+  sessions = out;
+  return out;
+}
+
+// ---------- 预警 ----------
+const alertState = {}; // code -> 运行时状态
+let lastAlertPrune = 0;
+function runAlerts(quotes) {
+  const cfg = store.get();
+  const now = Date.now();
+  const today = partsIn('Asia/Shanghai', new Date(now)).ymd;
+  const disable = {};
+  for (const [code, raw] of Object.entries(cfg.alerts)) {
+    const q = quotes[code];
+    if (!q) continue;
+    // 只在这只股票的市场在交易时判断，避免收盘后的报价“触发”
+    const ses = sessions[marketOf(code)];
+    if (ses && !ses.active) continue;
+    const rule = alerts.cleanRule(raw);
+    const st = alertState[code] || (alertState[code] = {});
+    const r = alerts.evaluate(rule, st, q, now, today);
+    for (const ev of r.events) fireAlert(ev, cfg);
+    if (r.disable.length) disable[code] = r.disable;
+  }
+  if (Object.keys(disable).length) {
+    const next = JSON.parse(JSON.stringify(store.get().alerts));
+    for (const [code, keys] of Object.entries(disable)) {
+      if (!next[code]) continue;
+      for (const k of keys) next[code][k + 'On'] = false;
+      next[code].keep = true; // 规则都关了也留在列表里，方便再打开
+    }
+    applyConfig({ alerts: next });
+  }
+  if (now - lastAlertPrune > 3600000) {
+    lastAlertPrune = now;
+    for (const c of Object.keys(alertState)) if (!cfg.alerts[c]) delete alertState[c];
+  }
+}
+
+function fireAlert(ev, cfg) {
+  log('[alert]', ev.code, ev.kind, ev.title);
+  const item = inbox.add({ kind: 'alert', id: ev.code + ':' + ev.kind + ':' + ev.time, app: '预警', code: ev.code, alertKind: ev.kind, title: ev.title, body: ev.body, time: ev.time });
+  if (item) broadcast('inbox:changed', { unread: inbox.unread() });
+  broadcast('alert', Object.assign({}, ev, { cardMs: cfg.alertCardMs }));
+}
+
+// ---------- 汇率 ----------
+let fx = null; // { USD, HKD, at, auto }
+let fxFetchedAt = 0;
+function currentFx() {
+  const cfg = store.get();
+  if (cfg.fxAuto && fx) return { USD: fx.USD, HKD: fx.HKD, auto: true, at: fx.at };
+  return { USD: cfg.fxUSD, HKD: cfg.fxHKD, auto: false, at: 0 };
+}
+async function refreshFx(force) {
+  const cfg = store.get();
+  if (!cfg.fxAuto) return;
+  const needs = Object.keys(cfg.holdings).some((c) => marketOf(c) !== 'a');
+  if (!needs && !force) return;
+  if (!force && Date.now() - fxFetchedAt < 10 * 60 * 1000) return;
+  fxFetchedAt = Date.now();
+  const r = await feed.fetchFx();
+  if (r) { fx = r; broadcast('fx', currentFx()); broadcastPnl(); }
+}
+
+/** 每个分组的持仓盈亏（人民币），没有持仓的分组是 null */
+function pnlState() {
+  const cfg = store.get();
+  const rates = currentFx();
+  return {
+    fx: rates,
+    groups: cfg.groups.map((g) => pnl.group(g.codes, lastQuotes, cfg.holdings, rates)),
+    items: Object.fromEntries(Object.keys(cfg.holdings).map((c) => [c, pnl.one(c, lastQuotes[c], cfg.holdings[c], rates)]))
+  };
+}
+function broadcastPnl() { broadcast('pnl', pnlState()); }
+
+// ---------- 低调模式 ----------
+// stealthOverride：快捷键 / 托盘手动切换后，覆盖时间表，直到时间表本身的状态变化
+let stealthOverride = null;
+let lastScheduleState = null;
+let stealthOn = false;
+function updateStealth() {
+  const cfg = store.get();
+  const sched = inStealthSchedule(cfg);
+  if (lastScheduleState !== null && sched !== lastScheduleState) stealthOverride = null;
+  lastScheduleState = sched;
+  const on = stealthOverride !== null ? stealthOverride : (cfg.stealth || sched);
+  if (on !== stealthOn) {
+    stealthOn = on;
+    broadcast('stealth', stealthOn);
+    buildTray();
+  }
+  return stealthOn;
+}
+function toggleStealth() {
+  stealthOverride = !stealthOn;
+  updateStealth();
 }
 
 async function poll() {
   clearTimeout(pollTimer);
+  const cfg = store.get();
   try {
     const q = await feed.fetchQuotes(allCodes());
     lastQuotes = Object.assign(lastQuotes, q);
     if (!online) { online = true; broadcast('status', { online }); }
+    computeSessions();
     broadcast('quotes', lastQuotes);
+    broadcast('session', { sessions, source: feed.currentSource() });
+    broadcastPnl();
+    runAlerts(q);
   } catch (e) {
     if (online) { online = false; broadcast('status', { online, error: String(e.message || e) }); }
   }
-  pollTimer = setTimeout(poll, store.get().refreshMs);
+  refreshFx().catch(() => {});
+  // 所有市场都不在交易时段时，慢下来
+  const active = !Object.keys(sessions).length || Object.values(sessions).some((s) => s.active);
+  pollTimer = setTimeout(poll, active ? cfg.refreshMs : cfg.idleRefreshMs);
+}
+
+// 时段可能在两次慢速刷新之间变化（例如 9:15 开始竞价），每分钟检查一次，变化时立即刷新
+let lastActive = null;
+function sessionWatch() {
+  computeSessions();
+  const active = Object.values(sessions).some((s) => s.active);
+  if (lastActive !== null && active !== lastActive) poll();
+  lastActive = active;
+  broadcast('session', { sessions, source: feed.currentSource() });
+  updateStealth();
 }
 
 function setHidden(h) {
@@ -185,7 +340,8 @@ function registerShortcuts() {
   const entries = [
     ['bossKey', cfg.bossKey, () => setHidden(!hidden)],
     ['clipKey', cfg.clipKey, () => summon('clip')],
-    ['todoKey', cfg.todoKey, () => summon('todo')]
+    ['todoKey', cfg.todoKey, () => summon('todo')],
+    ['stealthKey', cfg.stealthKey, toggleStealth]
   ];
   shortcutStatus = {};
   for (const [name, key, fn] of entries) {
@@ -217,12 +373,29 @@ function applyConfig(patch) {
   const before = store.get();
   const cfg = store.set(patch);
   broadcast('config', cfg);
-  if (['bossKey', 'clipKey', 'todoKey'].some((k) => before[k] !== cfg[k])) registerShortcuts();
+  if (['bossKey', 'clipKey', 'todoKey', 'stealthKey'].some((k) => before[k] !== cfg[k])) registerShortcuts();
   if (clips && before.clipLimit !== cfg.clipLimit) { clips.setLimit(cfg.clipLimit); broadcast('clip:changed'); }
   if (native && before.notify !== cfg.notify) native.send({ cmd: 'notify', on: cfg.notify });
+  if (['stealth', 'stealthSchedule', 'stealthStart', 'stealthEnd'].some((k) => JSON.stringify(before[k]) !== JSON.stringify(cfg[k])) ||
+      JSON.stringify(before.stealthDays) !== JSON.stringify(cfg.stealthDays)) {
+    stealthOverride = null;
+    updateStealth();
+  }
+  if (islandWin && before.hideInCapture !== cfg.hideInCapture) islandWin.setContentProtection(cfg.hideInCapture);
+  if (before.fxAuto !== cfg.fxAuto || before.fxUSD !== cfg.fxUSD || before.fxHKD !== cfg.fxHKD) {
+    broadcast('fx', currentFx());
+    if (cfg.fxAuto) refreshFx(true).catch(() => {});
+  }
+  if (JSON.stringify(before.holdings) !== JSON.stringify(cfg.holdings) || JSON.stringify(before.groups) !== JSON.stringify(cfg.groups) ||
+      before.fxUSD !== cfg.fxUSD || before.fxHKD !== cfg.fxHKD || before.fxAuto !== cfg.fxAuto) broadcastPnl();
   buildTray();
-  if (JSON.stringify(before.groups) !== JSON.stringify(cfg.groups) || before.refreshMs !== cfg.refreshMs) poll();
+  const codesChanged = JSON.stringify(allCodesOf(before)) !== JSON.stringify(allCodesOf(cfg));
+  if (codesChanged || before.refreshMs !== cfg.refreshMs) poll();
   return cfg;
+}
+
+function allCodesOf(cfg) {
+  return [cfg.groups.map((g) => g.codes), cfg.indexes, Object.keys(cfg.alerts), Object.keys(cfg.holdings)];
 }
 
 function buildTray() {
@@ -243,6 +416,7 @@ function buildTray() {
     modeItem('自动：靠近时变成岛', 'auto'),
     modeItem('常驻：一直显示岛', 'pinned'),
     { type: 'separator' },
+    { label: '低调模式（' + cfg.stealthKey + '）', type: 'checkbox', checked: stealthOn, click: () => toggleStealth() },
     { label: '红涨绿跌', type: 'checkbox', checked: cfg.redUp, click: (it) => applyConfig({ redUp: it.checked }) },
     { label: '剪贴板历史（' + cfg.clipKey + '）', click: () => summon('clip') },
     { label: '待办与笔记（' + cfg.todoKey + '）', click: () => summon('todo') },
@@ -307,11 +481,17 @@ function clipView(it) {
     v.length = it.text.length;
   } else {
     v.width = it.width; v.height = it.height;
-    if (!thumbCache.has(it.id)) {
-      try { thumbCache.set(it.id, 'data:image/png;base64,' + fs.readFileSync(clips.thumbPath(it)).toString('base64')); }
-      catch (e) { thumbCache.set(it.id, ''); }
+    let t = thumbCache.get(it.id);
+    if (t === undefined) {
+      try { t = 'data:image/png;base64,' + fs.readFileSync(clips.thumbPath(it)).toString('base64'); }
+      catch (e) { t = ''; }
+    } else {
+      thumbCache.delete(it.id); // 重新插入，保持“最近用过的在最后”
     }
-    v.thumb = thumbCache.get(it.id);
+    thumbCache.set(it.id, t);
+    // 缩略图缓存最多留 60 张，多了丢掉最久没用的（需要时再从磁盘读）
+    while (thumbCache.size > 60) thumbCache.delete(thumbCache.keys().next().value);
+    v.thumb = t;
   }
   return v;
 }
@@ -478,10 +658,71 @@ function setupIpc() {
   ipcMain.handle('config:get', () => store.get());
   ipcMain.handle('config:set', (_e, patch) => applyConfig(patch || {}));
   ipcMain.handle('quotes:get', () => lastQuotes);
-  ipcMain.handle('minute:get', async (_e, code) => {
+  ipcMain.handle('minute:get', async (_e, code, ndays) => {
     if (typeof code !== 'string') return null;
     const q = lastQuotes[code] || {};
-    try { return await feed.fetchMinute(code, q.symbol, q.prevClose); } catch (e) { return null; }
+    try { return await feed.fetchMinute(code, q.symbol, q.prevClose, ndays === 5 ? 5 : 1); } catch (e) { return null; }
+  });
+  ipcMain.handle('kline:get', async (_e, code, klt) => {
+    if (typeof code !== 'string') return null;
+    const q = lastQuotes[code] || {};
+    try { return await feed.fetchKline(code, q.symbol, klt === 102 ? 102 : 101); } catch (e) { return null; }
+  });
+  ipcMain.handle('book:get', async (_e, code) => {
+    if (typeof code !== 'string' || marketOf(code) !== 'a') return null;
+    const q = lastQuotes[code] || {};
+    try { return await feed.fetchBook(code, q.symbol); } catch (e) { return null; }
+  });
+  ipcMain.handle('session:get', () => ({ sessions, source: feed.currentSource() }));
+  ipcMain.handle('stealth:get', () => stealthOn);
+  ipcMain.on('stealth:toggle', () => toggleStealth());
+  ipcMain.handle('fx:get', () => currentFx());
+  ipcMain.handle('pnl:get', () => pnlState());
+  // 复制股票代码等短文本；不记进剪贴板历史
+  ipcMain.handle('text:copy', async (_e, text) => {
+    if (typeof text !== 'string' || !text || text.length > 200) return false;
+    return clipWatcher ? clipWatcher.copy({ type: 'text', text }) : false;
+  });
+  ipcMain.handle('alert:describe', (_e, rule) => alerts.describe(rule));
+  ipcMain.handle('groups:export', async (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    const r = await dialog.showSaveDialog(w, {
+      title: '导出分组',
+      defaultPath: path.join(app.getPath('documents'), '余光-分组.json'),
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    });
+    if (r.canceled || !r.filePath) return { ok: false };
+    try { fs.writeFileSync(r.filePath, exportGroups(store.get()), 'utf8'); return { ok: true, path: r.filePath }; }
+    catch (err) { return { ok: false, error: String(err.message || err) }; }
+  });
+  ipcMain.handle('groups:import', async (e, mode) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    const r = await dialog.showOpenDialog(w, { title: '导入分组', properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (r.canceled || !r.filePaths.length) return { ok: false };
+    try {
+      const data = parseImport(fs.readFileSync(r.filePaths[0], 'utf8'));
+      const cfg = store.get();
+      const patch = {};
+      if (mode === 'merge') {
+        // 合并：同名分组合并代码，其他追加
+        const groups = JSON.parse(JSON.stringify(cfg.groups));
+        for (const g of data.groups) {
+          const hit = groups.find((x) => x.name === g.name);
+          if (hit) hit.codes = Array.from(new Set(hit.codes.concat(g.codes)));
+          else groups.push(g);
+        }
+        patch.groups = groups;
+        if (data.holdings) patch.holdings = Object.assign({}, cfg.holdings, data.holdings);
+        if (data.alerts) patch.alerts = Object.assign({}, cfg.alerts, data.alerts);
+      } else {
+        patch.groups = data.groups;
+        patch.activeGroup = 0;
+        if (data.holdings) patch.holdings = data.holdings;
+        if (data.alerts) patch.alerts = data.alerts;
+      }
+      applyConfig(patch);
+      return { ok: true, groups: data.groups.length };
+    } catch (err) { return { ok: false, error: String(err.message || err) }; }
   });
   ipcMain.handle('search', async (_e, q) => {
     try { return await feed.search(q); } catch (e) { return []; }
@@ -502,6 +743,19 @@ function setupIpc() {
     return app.getLoginItemSettings().openAtLogin;
   });
   ipcMain.handle('app:info', () => ({ version: app.getVersion() }));
+  // 关于页显示的内存占用：所有 Electron 进程的工作集 + 原生小助手
+  ipcMain.handle('app:memory', async () => {
+    const metrics = app.getAppMetrics();
+    let total = 0, gpu = 0;
+    for (const m of metrics) {
+      const kb = (m.memory && m.memory.workingSetSize) || 0;
+      total += kb;
+      if (m.type === 'GPU') gpu += kb;
+    }
+    const nativeKb = native && native.memoryKb ? await native.memoryKb().catch(() => 0) : 0;
+    const mb = (kb) => Math.round(kb / 1024);
+    return { totalMB: mb(total + nativeKb), processes: metrics.length + (nativeKb ? 1 : 0), gpu: mb(gpu), native: mb(nativeKb) };
+  });
   ipcMain.on('focus:set', (e, on) => {
     if (BrowserWindow.fromWebContents(e.sender) === islandWin) setIslandFocus(!!on);
   });
@@ -513,7 +767,6 @@ function setupIpc() {
 
 app.whenReady().then(() => {
   if (process.platform === 'win32') app.setAppUserModelId('com.naolen.peekisland');
-  store = new ConfigStore(app.getPath('userData'));
   setupIpc();
   setupClips();
   setupTodos();
@@ -522,7 +775,13 @@ app.whenReady().then(() => {
   createIsland();
   buildTray();
   registerShortcuts();
+  updateStealth();
   poll();
+  setInterval(sessionWatch, 60000);
+  // 排查内存用：设置环境变量 PEEK_DEBUG_MEM=1 后每 10 秒把各进程内存写进日志
+  if (process.env.PEEK_DEBUG_MEM) {
+    setInterval(() => log('[mem]', app.getAppMetrics().map((m) => m.type + ':' + Math.round(m.memory.workingSetSize / 1024) + 'MB').join(' ')), 10000);
+  }
   setupNative();
   screen.on('display-metrics-changed', placeIsland);
   screen.on('display-added', placeIsland);

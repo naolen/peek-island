@@ -50,8 +50,9 @@
     } else {
       $('stockList').innerHTML = g.codes.map((c, i) => {
         const q = quotes[c] || {};
-        return `<div class="stock-row">
-          <span class="name">${esc(q.name || shortCode(c))}</span>
+        return `<div class="stock-row" draggable="true" data-i="${i}">
+          <span class="grip" aria-hidden="true" title="拖动排序">⋮⋮</span>
+          <span class="name">${esc(q.name || shortCode(c))}${cfg.holdings[c] ? '<i class="tag">持仓</i>' : ''}${cfg.alerts[c] ? '<i class="tag amber">预警</i>' : ''}</span>
           <span class="code num">${esc(shortCode(c))} · ${marketName(c)}</span>
           <span class="num r">${fmtP(q.price)}</span>
           <span class="num r" style="color:${colorOf(q.pct)}">${fmtPct(q.pct)}</span>
@@ -84,6 +85,10 @@
     $('opacity').value = cfg.opacity; $('opacityVal').textContent = Math.round(cfg.opacity * 100) + '%';
     $('scale').value = cfg.scale; $('scaleVal').textContent = Math.round(cfg.scale * 100) + '%';
     $('topOffset').value = cfg.topOffset; $('topVal').textContent = cfg.topOffset ? cfg.topOffset + 'px' : '贴边';
+    renderStockExtras();
+    renderAlerts();
+    renderHoldings();
+    renderStealth();
     renderResults();
   }
 
@@ -379,7 +384,7 @@
   let shortcuts = {};
   const KEY_TEXT = { busy: '被其他软件占用', invalid: '格式不对，例如 Control+Alt+V', off: '未设置' };
   function renderShortcutStatus() {
-    for (const k of ['bossKey', 'clipKey', 'todoKey']) {
+    for (const k of ['bossKey', 'clipKey', 'todoKey', 'stealthKey']) {
       const el = $(k + 'Status');
       if (!el) continue;
       const s = shortcuts[k];
@@ -395,6 +400,246 @@
     $(id).addEventListener('input', () => save({ [key]: Number($(id).value) }));
   });
 
+
+  // ---------- 行情：显示、指数、导入导出、拖动排序 ----------
+  const INDEX_CHOICES = [
+    ['sh000001', '上证指数'], ['sz399001', '深证成指'], ['sz399006', '创业板指'], ['sh000300', '沪深300'], ['sh000688', '科创50'],
+    ['giHSI', '恒生指数'], ['giHSCEI', '国企指数'], ['giNDX', '纳斯达克100'], ['giDJIA', '道琼斯'], ['giSPX', '标普500']
+  ];
+  function renderStockExtras() {
+    $('groupDisplay').value = cfg.groupDisplay;
+    if (document.activeElement !== $('idleRefresh')) $('idleRefresh').value = cfg.idleRefreshMs / 60000;
+    $('indexPick').innerHTML = INDEX_CHOICES.map(([c, n]) => {
+      const on = cfg.indexes.includes(c);
+      const full = !on && cfg.indexes.length >= 6;
+      return `<label class="pick${on ? ' on' : ''}${full ? ' off' : ''}"><input type="checkbox" data-c="${c}"${on ? ' checked' : ''}${full ? ' disabled' : ''}>${esc(n)}</label>`;
+    }).join('');
+  }
+  $('groupDisplay').addEventListener('change', () => save({ groupDisplay: $('groupDisplay').value }));
+  $('idleRefresh').addEventListener('change', () => save({ idleRefreshMs: Math.round(Number($('idleRefresh').value) * 60000) }));
+  $('indexPick').addEventListener('change', (e) => {
+    const c = e.target.dataset.c;
+    if (!c) return;
+    const list = cfg.indexes.filter((x) => x !== c);
+    if (e.target.checked) {
+      // 按候选列表的顺序排
+      list.push(c);
+      list.sort((a, b) => INDEX_CHOICES.findIndex((x) => x[0] === a) - INDEX_CHOICES.findIndex((x) => x[0] === b));
+    }
+    save({ indexes: list });
+  });
+  const ioHint = (t, warn) => { $('ioHint').textContent = t; $('ioHint').classList.toggle('warn', !!warn); };
+  $('exportGroups').addEventListener('click', async () => {
+    const r = await api.exportGroups();
+    if (r && r.ok) ioHint('已导出（含持仓和预警）');
+    else if (r && r.error) ioHint('导出失败：' + r.error, true);
+  });
+  $('importGroups').addEventListener('click', async () => {
+    const r = await api.importGroups('merge');
+    if (r && r.ok) ioHint(`已导入 ${r.groups} 个分组`);
+    else if (r && r.error) ioHint('导入失败：' + r.error, true);
+  });
+
+  // 股票列表拖动排序（按住左边的把手）
+  let dragFrom = -1;
+  $('stockList').addEventListener('dragstart', (e) => {
+    const row = e.target.closest('.stock-row');
+    if (!row) return;
+    dragFrom = Number(row.dataset.i);
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', String(dragFrom)); } catch (err) { /* ignore */ }
+  });
+  $('stockList').addEventListener('dragover', (e) => {
+    if (dragFrom < 0) return;
+    e.preventDefault();
+    const row = e.target.closest('.stock-row');
+    document.querySelectorAll('.stock-row.drop-before, .stock-row.drop-after').forEach((r) => r.classList.remove('drop-before', 'drop-after'));
+    if (!row) return;
+    const r = row.getBoundingClientRect();
+    row.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after');
+  });
+  $('stockList').addEventListener('drop', (e) => {
+    e.preventDefault();
+    const row = e.target.closest('.stock-row');
+    if (!row || dragFrom < 0) return;
+    const r = row.getBoundingClientRect();
+    let to = Number(row.dataset.i) + (e.clientY < r.top + r.height / 2 ? 0 : 1);
+    const groups = groupsCopy();
+    const codes = groups[sel].codes;
+    const [moved] = codes.splice(dragFrom, 1);
+    if (to > dragFrom) to -= 1;
+    codes.splice(to, 0, moved);
+    dragFrom = -1;
+    save({ groups });
+  });
+  $('stockList').addEventListener('dragend', () => {
+    dragFrom = -1;
+    document.querySelectorAll('.stock-row.dragging, .stock-row.drop-before, .stock-row.drop-after').forEach((r) => r.classList.remove('dragging', 'drop-before', 'drop-after'));
+  });
+
+  // ---------- 预警 ----------
+  const nameOf = (c) => (quotes[c] && quotes[c].name) || shortCode(c);
+  const NOTIFY_TEXT = { card: '弹出卡片', strip: '只闪光带' };
+  const REPEAT_TEXT = { once: '提醒一次', daily: '每天一次', every: '每次' };
+  function describeRule(r) {
+    const parts = [];
+    if (r.upOn) parts.push('涨到 ' + fmtP(r.up));
+    if (r.downOn) parts.push('跌到 ' + fmtP(r.down));
+    if (r.pctOn) parts.push('涨跌幅超 ±' + r.pct + '%');
+    if (r.fastOn) parts.push('5 分钟急拉跳水 ' + r.fast + '%');
+    if (r.limitOn) parts.push('涨跌停 / 开板');
+    return parts.join(' · ') || '已全部触发过（提醒一次的规则触发后会自动关掉）';
+  }
+  function renderAlerts() {
+    const codes = Object.keys(cfg.alerts);
+    $('alertList').innerHTML = codes.length ? codes.map((c) => {
+      const r = cfg.alerts[c];
+      const q = quotes[c] || {};
+      const any = r.upOn || r.downOn || r.pctOn || r.fastOn || r.limitOn;
+      return `<div class="alert-row${any ? '' : ' idle'}">
+        <span class="a-name">${esc(nameOf(c))}<span class="hint num">${esc(shortCode(c))} · ${fmtP(q.price)}</span></span>
+        <span class="a-desc">${esc(describeRule(r))}<span class="hint">${NOTIFY_TEXT[r.notify] || ''} · ${REPEAT_TEXT[r.repeat] || ''}</span></span>
+        <button type="button" class="mini-btn danger" data-del="${esc(c)}">删除</button>
+      </div>`;
+    }).join('') : '<div class="empty-list">还没有预警。在岛上展开面板，点股票旁边的「预警」来设置</div>';
+    if (document.activeElement !== $('alertCard')) $('alertCard').value = cfg.alertCardMs / 1000;
+  }
+  $('alertList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    const next = Object.assign({}, cfg.alerts);
+    delete next[b.dataset.del];
+    save({ alerts: next });
+  });
+  $('alertCard').addEventListener('change', () => save({ alertCardMs: Math.round(Number($('alertCard').value) * 1000) }));
+
+  // ---------- 持仓 ----------
+  let pnlState = null;
+  const fmtMoney = (v) => {
+    if (v == null) return '--';
+    const a = Math.abs(v);
+    return (v > 0 ? '+' : v < 0 ? '−' : '') + a.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  };
+  const moneyColor = (v) => v == null || v === 0 ? '#C4C8CE' : (v > 0) === cfg.redUp ? '#FF5B5B' : '#2FD27A';
+  function renderHoldings() {
+    const codes = Object.keys(cfg.holdings);
+    const items = (pnlState && pnlState.items) || {};
+    const editing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#holdList');
+    if (!editing) {
+      $('holdList').innerHTML = codes.length ? codes.map((c) => {
+        const h = cfg.holdings[c];
+        const it = items[c];
+        const q = quotes[c] || {};
+        return `<div class="hold-row" data-c="${esc(c)}">
+          <span>${esc(nameOf(c))}</span><span class="hint num">${esc(shortCode(c))}</span>
+          <input class="input num r" data-k="qty" value="${h.qty}" inputmode="decimal" aria-label="股数">
+          <input class="input num r" data-k="cost" value="${h.cost || ''}" placeholder="可不填" inputmode="decimal" aria-label="成本价">
+          <span class="num r">${fmtP(q.price)}</span>
+          <span class="num r" style="color:${moneyColor(it && it.todayCny)}">${it ? fmtMoney(it.todayCny) : '--'}</span>
+          <span class="num r" style="color:${moneyColor(it && it.totalCny)}">${it && it.totalCny !== null ? fmtMoney(it.totalCny) + ' <small>' + fmtPct(it.totalPct) + '</small>' : '--'}</span>
+          <button type="button" class="mini-btn danger" data-del="${esc(c)}">清除</button>
+        </div>`;
+      }).join('') : '<div class="empty-list">还没有持仓。在下面选一只，或者在岛上右键股票 →「编辑持仓」</div>';
+    }
+    // 汇总
+    let today = 0, total = 0, any = false;
+    for (const c of codes) { const it = items[c]; if (it) { any = true; today += it.todayCny; if (it.totalCny !== null) total += it.totalCny; } }
+    $('holdTotal').innerHTML = any ? `今日 <b style="color:${moneyColor(today)}">${fmtMoney(today)}</b> · 持仓 <b style="color:${moneyColor(total)}">${fmtMoney(total)}</b>（人民币）` : '';
+    // 添加下拉
+    const all = Array.from(new Set(cfg.groups.flatMap((g) => g.codes))).filter((c) => !cfg.holdings[c]);
+    $('holdAdd').innerHTML = '<option value="">＋ 从分组里添加一只…</option>' + all.map((c) => `<option value="${esc(c)}">${esc(nameOf(c))}  ${esc(shortCode(c))}</option>`).join('');
+    $('pnlOnIsland').value = cfg.pnlOnIsland ? '1' : '0';
+    $('pnlShow').value = cfg.pnlShow;
+    $('fxAuto').value = cfg.fxAuto ? '1' : '0';
+    if (document.activeElement !== $('fxHKD')) $('fxHKD').value = cfg.fxHKD;
+    if (document.activeElement !== $('fxUSD')) $('fxUSD').value = cfg.fxUSD;
+    const fx = pnlState && pnlState.fx;
+    $('fxNow').textContent = fx ? `现在用的：1 港币 = ${fx.HKD.toFixed(4)}，1 美元 = ${fx.USD.toFixed(4)}${fx.auto ? '（自动）' : '（手动）'}` : '';
+  }
+  $('holdList').addEventListener('change', (e) => {
+    const inp = e.target.closest('input[data-k]');
+    if (!inp) return;
+    const c = inp.closest('.hold-row').dataset.c;
+    const h = Object.assign({}, cfg.holdings[c]);
+    const n = parseFloat(inp.value);
+    h[inp.dataset.k] = Number.isFinite(n) && n > 0 ? n : 0;
+    const next = Object.assign({}, cfg.holdings, { [c]: h });
+    if (!(h.qty > 0)) delete next[c];
+    inp.blur();
+    save({ holdings: next });
+  });
+  $('holdList').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+  $('holdList').addEventListener('focusout', (e) => { if (e.target.matches('input')) setTimeout(() => { if (!document.activeElement.closest('#holdList')) renderHoldings(); }, 0); });
+  $('holdList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    const next = Object.assign({}, cfg.holdings);
+    delete next[b.dataset.del];
+    save({ holdings: next });
+  });
+  $('holdAdd').addEventListener('change', () => {
+    const c = $('holdAdd').value;
+    if (!c) return;
+    save({ holdings: Object.assign({}, cfg.holdings, { [c]: { qty: 100, cost: 0 } }) }).then(() => {
+      const inp = document.querySelector(`#holdList .hold-row[data-c="${c}"] input[data-k="qty"]`);
+      if (inp) { inp.focus(); inp.select(); }
+    });
+  });
+  $('pnlOnIsland').addEventListener('change', () => save({ pnlOnIsland: $('pnlOnIsland').value === '1' }));
+  $('pnlShow').addEventListener('change', () => save({ pnlShow: $('pnlShow').value }));
+  $('fxAuto').addEventListener('change', () => save({ fxAuto: $('fxAuto').value === '1' }));
+  $('fxHKD').addEventListener('change', () => save({ fxHKD: Number($('fxHKD').value) }));
+  $('fxUSD').addEventListener('change', () => save({ fxUSD: Number($('fxUSD').value) }));
+  if (api.getPnl) {
+    api.getPnl().then((p) => { pnlState = p; if (cfg) renderHoldings(); });
+    api.onPnl((p) => { pnlState = p; if (cfg) renderHoldings(); });
+  }
+
+  // ---------- 低调模式 ----------
+  const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+  let stealthOn = false;
+  function renderStealth() {
+    $('stealth').value = cfg.stealth ? '1' : '0';
+    if (document.activeElement !== $('stealthKey')) $('stealthKey').value = cfg.stealthKey;
+    $('stealthOpacity').value = cfg.stealthOpacity;
+    $('stealthOpacityVal').textContent = Math.round(cfg.stealthOpacity * 100) + '%';
+    $('stealthSchedule').value = cfg.stealthSchedule ? '1' : '0';
+    if (document.activeElement !== $('stealthStart')) $('stealthStart').value = cfg.stealthStart;
+    if (document.activeElement !== $('stealthEnd')) $('stealthEnd').value = cfg.stealthEnd;
+    $('stealthDays').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) => `<button type="button" class="day" data-d="${d}" aria-pressed="${cfg.stealthDays.includes(d)}">${WEEK[d]}</button>`).join('');
+    $('hideInCapture').value = cfg.hideInCapture ? '1' : '0';
+    $('lowMemory').value = cfg.lowMemory ? '1' : '0';
+    $('stealthNow').textContent = '现在：' + (stealthOn ? '已开启' : '未开启');
+  }
+  $('stealth').addEventListener('change', () => save({ stealth: $('stealth').value === '1' }));
+  $('stealthKey').addEventListener('change', () => save({ stealthKey: $('stealthKey').value.trim() }));
+  $('stealthOpacity').addEventListener('input', () => save({ stealthOpacity: Number($('stealthOpacity').value) }));
+  $('stealthSchedule').addEventListener('change', () => save({ stealthSchedule: $('stealthSchedule').value === '1' }));
+  $('stealthStart').addEventListener('change', () => save({ stealthStart: $('stealthStart').value }));
+  $('stealthEnd').addEventListener('change', () => save({ stealthEnd: $('stealthEnd').value }));
+  $('stealthDays').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-d]');
+    if (!b) return;
+    const d = Number(b.dataset.d);
+    const days = cfg.stealthDays.includes(d) ? cfg.stealthDays.filter((x) => x !== d) : cfg.stealthDays.concat([d]);
+    save({ stealthDays: days });
+  });
+  $('hideInCapture').addEventListener('change', () => save({ hideInCapture: $('hideInCapture').value === '1' }));
+  $('lowMemory').addEventListener('change', () => save({ lowMemory: $('lowMemory').value === '1' }));
+  if (api.getStealth) {
+    api.getStealth().then((on) => { stealthOn = !!on; if (cfg) renderStealth(); });
+    api.onStealth((on) => { stealthOn = !!on; if (cfg) renderStealth(); });
+  }
+
+  // ---------- 关于：内存 ----------
+  async function renderMemory() {
+    if (!api.memory || !document.querySelector('.page[data-section="about"].active')) return;
+    const m = await api.memory();
+    if (m) $('memNow').textContent = `${m.totalMB} MB（${m.processes} 个进程${m.gpu ? '，含 GPU 进程 ' + m.gpu + ' MB' : ''}${m.native ? '，原生小助手 ' + m.native + ' MB' : ''}）`;
+  }
+  setInterval(renderMemory, 3000);
+
   async function init() {
     cfg = await api.getConfig();
     quotes = await api.getQuotes();
@@ -409,13 +654,14 @@
     $('results').innerHTML = keepResults;
   }
   // ---------- 左侧菜单 ----------
-  const SECTIONS = ['general', 'stock', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
+  const SECTIONS = ['general', 'stock', 'alerts', 'holdings', 'stealth', 'look', 'music', 'notify', 'mail', 'clip', 'todo', 'about'];
   function showSection(name) {
     if (!SECTIONS.includes(name)) name = 'general';
     document.querySelectorAll('#navList button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.section === name)));
     document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.dataset.section === name));
     $('results').classList.remove('show');
     try { localStorage.setItem('peek.settings.section', name); } catch (e) { /* ignore */ }
+    if (name === 'about') setTimeout(renderMemory, 0);
     document.querySelector('.main').scrollTop = 0;
   }
   $('navList').addEventListener('click', (e) => {
@@ -441,7 +687,8 @@
       mail: Object.values(mail.status || {}).some((s) => s && s.state === 'error'),
       general: shortcuts.bossKey && shortcuts.bossKey !== 'ok',
       clip: shortcuts.clipKey && shortcuts.clipKey !== 'ok',
-      todo: shortcuts.todoKey && shortcuts.todoKey !== 'ok'
+      todo: shortcuts.todoKey && shortcuts.todoKey !== 'ok',
+      stealth: shortcuts.stealthKey && shortcuts.stealthKey !== 'ok'
     };
     document.querySelectorAll('#navList button').forEach((b) => {
       let dot = b.querySelector('.dot');
