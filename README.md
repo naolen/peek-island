@@ -81,7 +81,12 @@
 
 ## 安装
 
-到仓库的 **Actions → build** 下载最新一次构建产物 `peek-island-windows`，里面是 `peek-island-setup-x.y.z.exe`。打 `v*` 标签（例如 `v0.2.0`）时，安装包会自动发布到 **Releases**。
+到仓库的 **Releases** 下载最新版本，有两个文件，任选其一：
+
+- `peek-island-setup-x.y.z.exe`：安装版，装好后有开始菜单快捷方式，可以开机自启
+- `peek-island-portable-x.y.z.exe`：免安装版，双击直接运行，适合先试用（每次启动会先解压，比安装版慢几秒）
+
+每次推送到 main 的构建产物也可以在 **Actions → build → peek-island-windows** 里下载。打 `v*` 标签时会自动发布到 Releases。
 
 安装包没有做代码签名，第一次运行时 Windows SmartScreen 可能会提示“未知发布者”，点“更多信息 → 仍要运行”即可。
 

@@ -10,7 +10,7 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "native": "dotnet publish native/PeekNative/PeekNative.csproj -c Release -o native/publish",
-    "dist": "electron-builder --win nsis --x64 --publish never",
+    "dist": "electron-builder --win nsis portable --x64 --publish never",
     "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots"
   },
   "devDependencies": {
@@ -41,16 +41,23 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "余光"
+      "shortcutName": "余光",
+      "artifactName": "peek-island-setup-${version}.${ext}"
     },
-    "executableName": "PeekIsland"
+    "executableName": "PeekIsland",
+    "portable": {
+      "artifactName": "peek-island-portable-${version}.${ext}"
+    }
   },
   "dependencies": {
     "imapflow": "^2.11.0",
