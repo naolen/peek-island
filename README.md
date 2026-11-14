@@ -79,7 +79,18 @@
 
 都可以在设置里改；被别的软件占用时，设置里会提示。托盘图标左键隐藏 / 显示，右键菜单里有形态切换、配色、剪贴板、待办、设置、开机自动启动、退出。
 
-## 安装
+## 在自己电脑上打包（推荐）
+
+1. 安装 [Node.js](https://nodejs.org/zh-cn) 20 或更新版本；想要音乐和系统通知的话，再装 [.NET 8 SDK](https://dotnet.microsoft.com/zh-cn/download/dotnet/8.0)（不装也能打包，只是少这两项功能）
+2. 下载代码：`git clone https://github.com/naolen/peek-island.git`，或在 GitHub 页面点 Code → Download ZIP 解压
+3. 双击仓库里的 **`build.bat`**（国内网络双击 **`build-cn.bat`**，走国内镜像，下载快很多）
+4. 打包完成后会自动打开 `dist` 文件夹：
+   - `peek-island-portable-0.2.0.exe`：免安装，双击直接运行
+   - `peek-island-setup-0.2.0.exe`：安装版
+
+第一次打包要下载依赖，大约 3~10 分钟；之后再打包快很多。
+
+## 下载现成的安装包
 
 到仓库的 **Releases** 下载最新版本，有两个文件，任选其一：
 
