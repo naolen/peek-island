@@ -2,8 +2,31 @@
   "name": "peek-island",
   "version": "0.3.0",
   "description": "余光：贴在 Windows 屏幕顶部的光带 / 灵动岛式盯盘工具",
+  "keywords": [
+    "windows",
+    "dynamic-island",
+    "stock",
+    "stock-ticker",
+    "a-share",
+    "eastmoney",
+    "electron",
+    "desktop-widget",
+    "灵动岛",
+    "盯盘"
+  ],
+  "homepage": "https://github.com/naolen/peek-island#readme",
+  "bugs": {
+    "url": "https://github.com/naolen/peek-island/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/naolen/peek-island.git"
+  },
   "main": "src/main.js",
-  "author": "naolen",
+  "author": {
+    "name": "naolen",
+    "url": "https://github.com/naolen"
+  },
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -62,5 +85,8 @@
   "dependencies": {
     "imapflow": "^2.11.0",
     "mailparser": "^3.14.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

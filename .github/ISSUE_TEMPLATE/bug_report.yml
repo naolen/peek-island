@@ -1,0 +1,79 @@
+name: 问题反馈 / Bug report
+description: 余光哪里不对劲
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！安全问题请不要在这里提，按 SECURITY.md 私下报告。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 看到了什么，本来应该是什么样
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 怎么复现
+      placeholder: |
+        1. 打开面板
+        2. 点「日K」
+        3. ……
+  - type: input
+    id: version
+    attributes:
+      label: 余光版本
+      description: 设置 → 关于 里能看到
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: 安装方式
+      options:
+        - Releases 安装版
+        - Releases 免安装版
+        - 自己打包
+        - npm start 开发运行
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Windows 版本
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 哪个功能
+      multiple: true
+      options:
+        - 行情 / 图表
+        - 预警
+        - 持仓
+        - 低调模式
+        - 光带 / 岛 / 面板交互
+        - 音乐
+        - 系统通知
+        - 邮箱
+        - 剪贴板
+        - 待办
+        - 设置
+        - 打包 / 安装
+        - 其他
+  - type: textarea
+    id: log
+    attributes:
+      label: 日志
+      description: "`%APPDATA%/peek-island/logs/main.log` 里相关的几行。贴之前请检查有没有通知、邮件标题等你不想公开的内容。"
+      render: text
+  - type: textarea
+    id: shots
+    attributes:
+      label: 截图
+      description: 可以直接拖图片进来（注意遮住持仓金额等隐私）

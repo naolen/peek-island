@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # 只改文档时不跑 Windows 打包（打标签发布时不受影响）
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', '.github/PULL_REQUEST_TEMPLATE.md', 'LICENSE']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', '.github/PULL_REQUEST_TEMPLATE.md', 'LICENSE']
   workflow_dispatch:
     inputs:
       release:
@@ -13,7 +16,12 @@ on:
         default: ''
 
 permissions:
-  contents: write
+  contents: read
+
+# 同一分支上新的推送会取消还在跑的旧构建
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   test:
@@ -32,6 +40,8 @@ jobs:
   windows:
     needs: test
     runs-on: windows-latest
+    permissions:
+      contents: write # 发布 Release 需要
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,11 +71,47 @@ jobs:
       - run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: 生成校验和
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/*.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: peek-island-windows
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS.txt
           if-no-files-found: error
+      # 每次构建都跑一遍（不只是发布时），这样 CHANGELOG 格式有问题能提前发现
+      - name: 从 CHANGELOG.md 取这一版的说明
+        shell: pwsh
+        env:
+          TAG: ${{ inputs.release || (startsWith(github.ref, 'refs/tags/') && github.ref_name || '') }}
+        run: |
+          $ver = if ($env:TAG) { $env:TAG -replace '^v', '' } else { (Get-Content package.json -Raw | ConvertFrom-Json).version }
+          Write-Host "版本：$ver"
+          $lines = Get-Content CHANGELOG.md -Encoding utf8
+          $out = @(); $on = $false
+          foreach ($l in $lines) {
+            if ($l -match '^## \[') { if ($on) { break }; if ($l -match ('^## \[' + [regex]::Escape($ver) + '\]')) { $on = $true; continue } }
+            if ($on) { $out += $l }
+          }
+          $notes = ($out -join "`n").Trim()
+          if (-not $notes) { $notes = '详见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)。' }
+          $body = @"
+          $notes
+
+          ---
+
+          两个文件任选其一：
+          - **peek-island-setup-*.exe**：安装版，有开始菜单快捷方式，可开机自启
+          - **peek-island-portable-*.exe**：免安装版，双击直接运行，适合先试用
+
+          没有代码签名，首次运行如果出现“Windows 已保护你的电脑”，点“更多信息 → 仍要运行”。可以用 SHA256SUMS.txt 核对下载的文件。
+          "@
+          Set-Content -Path release-notes.md -Value $body -Encoding utf8
+          Get-Content release-notes.md -Encoding utf8
       - name: 发布到 Release（打 v* 标签，或手动运行时填了版本号）
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != '')
         uses: softprops/action-gh-release@v2
@@ -73,10 +119,7 @@ jobs:
           tag_name: ${{ inputs.release || github.ref_name }}
           name: 余光 ${{ inputs.release || github.ref_name }}
           target_commitish: ${{ github.sha }}
-          body: |
-            两个文件任选其一：
-            - **peek-island-setup-*.exe**：安装版，有开始菜单快捷方式，可开机自启
-            - **peek-island-portable-*.exe**：免安装版，双击直接运行，适合先试用
-
-            没有代码签名，首次运行如果出现“Windows 已保护你的电脑”，点“更多信息 → 仍要运行”。
-          files: dist/*.exe
+          body_path: release-notes.md
+          files: |
+            dist/*.exe
+            dist/SHA256SUMS.txt

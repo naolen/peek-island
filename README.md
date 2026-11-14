@@ -1,8 +1,47 @@
+<div align="center">
+
 # 余光 Peek Island
 
-贴在 Windows 屏幕顶部正中的“灵动岛”。平时只是一条几像素高的细光带；鼠标靠近就长成一个岛；点一下就展开成面板。不弹窗、不占任务栏、不抢键盘焦点，没在岛上时点击会直接穿透给下面的软件。
+**贴在 Windows 屏幕顶部的“灵动岛”，用余光盯盘。**
 
-能做的事：**股票行情**、**正在播放的音乐**、**系统通知（飞书 / QQ / 钉钉等）**、**邮箱新邮件**、**剪贴板历史**、**待办与每日笔记**。
+平时只是一条几像素高的细光带，鼠标靠近长成岛，点一下展开成面板。<br>
+不弹窗、不占任务栏、不抢键盘焦点；没在岛上时，点击直接穿透给下面的软件。
+
+[![build](https://github.com/naolen/peek-island/actions/workflows/build.yml/badge.svg)](https://github.com/naolen/peek-island/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/naolen/peek-island?include_prereleases&label=release)](https://github.com/naolen/peek-island/releases)
+[![license](https://img.shields.io/github/license/naolen/peek-island)](LICENSE)
+![platform](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D4)
+
+简体中文 · [English](README.en.md)
+
+</div>
+
+<p align="center"><img src="docs/images/forms.png" width="480" alt="光带、岛、预警卡片三种形态"></p>
+
+<p align="center"><img src="docs/images/panel.png" width="560" alt="展开后的行情面板"></p>
+
+> 截图里都是演示数据。
+
+能做的事：**股票行情**（分时 / K 线 / 预警 / 持仓盈亏 / 低调模式）、**正在播放的音乐**、**系统通知**（飞书 / QQ / 钉钉等）、**邮箱新邮件**、**剪贴板历史**、**待办与每日笔记**。
+
+## 快速开始
+
+- **直接用**：到 [Releases](https://github.com/naolen/peek-island/releases) 下载 `peek-island-portable-x.y.z.exe`，双击运行。
+- **自己打包**：装好 [Node.js](https://nodejs.org/zh-cn) 20+，下载代码后双击 `build.bat`（国内网络用 `build-cn.bat`），详见[在自己电脑上打包](#在自己电脑上打包推荐)。
+
+启动后屏幕顶部正中会出现一条细光。鼠标移上去变成岛，点一下展开；托盘图标右键是菜单，`Ctrl + Alt + S` 一键隐藏。
+
+<details>
+<summary>目录</summary>
+
+- [三种形态](#三种形态)
+- [行情](#行情) · [预警](#预警) · [持仓盈亏](#持仓盈亏) · [低调模式](#低调模式ctrl--alt--h)
+- [音乐](#音乐) · [系统通知](#系统通知) · [邮箱](#邮箱) · [剪贴板历史](#剪贴板历史) · [待办与每日笔记](#待办与每日笔记)
+- [外观](#外观) · [快捷键与托盘](#快捷键与托盘) · [内存](#内存)
+- [在自己电脑上打包](#在自己电脑上打包推荐) · [下载现成的安装包](#下载现成的安装包) · [本地开发](#本地开发)
+- [常见问题](#常见问题) · [数据来源与隐私](#数据来源与隐私) · [参与贡献](#参与贡献) · [致谢](#致谢)
+
+</details>
 
 ## 三种形态
 
@@ -34,6 +73,8 @@
 - 设置里可以拖动给股票排序；分组（连同持仓和预警）可以导出成文件、在另一台电脑导入
 - 东方财富连不上时自动改用腾讯行情（只有报价），恢复后切回来
 
+<p align="center"><img src="docs/images/panel-kline.png" width="420" alt="日 K 与十字光标"> <img src="docs/images/alert.png" width="420" alt="设置预警"></p>
+
 ### 预警
 
 - 价格涨到 / 跌到、今日涨跌幅超过、5 分钟急拉 / 跳水、涨停 / 跌停 / 开板（A 股，按主板 10%、创业板 / 科创板 20%、北交所 30%、ST 5% 计算）
@@ -46,13 +87,19 @@
 - 填股数和成本价，面板上显示今日盈亏、持仓盈亏和占比，岛上显示本组今日盈亏（金额 / 百分比 / 只显示方向）
 - 港股、美股按汇率折成人民币汇总；汇率自动获取，取不到时用设置里的数
 
+<p align="center"><img src="docs/images/settings.png" width="640" alt="设置 → 持仓"></p>
+
 ### 低调模式（`Ctrl + Alt + H`）
 
 - 不用红绿色、名称换成代码、不显示金额、光带变细变灰、整体更淡
 - 可以按时间表自动开启（比如工作日 9:00–18:00）
 - 共享屏幕、截图、录屏时岛对别人不可见，自己照常看得到（Windows 10 2004 及以上，默认开启）
 
+<p align="center"><img src="docs/images/stealth.png" width="420" alt="低调模式"></p>
+
 ## 音乐
+
+<p align="center"><img src="docs/images/pages.png" width="720" alt="音乐、剪贴板、待办、消息"></p>
 
 只要播放器接入了 Windows 系统媒体控制（按键盘多媒体键能控制的那些：QQ 音乐、网易云音乐、酷狗、Spotify、浏览器里的视频等），就能显示封面、歌名、进度和跟着音量跳动的波形，并可以上一首 / 播放暂停 / 下一首。暂停 5 分钟后自动从岛上收起。
 
@@ -117,8 +164,8 @@
 2. 下载代码：`git clone https://github.com/naolen/peek-island.git`，或在 GitHub 页面点 Code → Download ZIP 解压
 3. 双击仓库里的 **`build.bat`**（国内网络双击 **`build-cn.bat`**，走国内镜像，下载快很多）
 4. 打包完成后会自动打开 `dist` 文件夹：
-   - `peek-island-portable-0.2.0.exe`：免安装，双击直接运行
-   - `peek-island-setup-0.2.0.exe`：安装版
+   - `peek-island-portable-x.y.z.exe`：免安装，双击直接运行
+   - `peek-island-setup-x.y.z.exe`：安装版
 
 第一次打包要下载依赖，大约 3~10 分钟；之后再打包快很多。
 
@@ -139,7 +186,7 @@
 npm install
 npm run native     # （Windows，需要 .NET 8 SDK）编译原生小助手；不编也能跑，只是没有音乐和系统通知
 npm start          # 启动
-npm test           # 单元测试（行情解析、配置、剪贴板 / 待办存储、消息、邮箱——邮箱用本地假 IMAP 服务器测试）
+npm test           # 单元测试（行情解析、交易时段、预警、盈亏、配置、剪贴板 / 待办存储、消息、邮箱——邮箱用本地假 IMAP 服务器测试）
 npm run dist       # 在 Windows 上打包 nsis 安装包
 npm run smoke      # （Linux，需要 xvfb）用假数据截图检查界面，输出到 ./shots
 ```
@@ -172,12 +219,48 @@ scripts/           截图自测用的假数据和脚本
 test/              单元测试
 ```
 
+## 常见问题
+
+**行情不刷新 / 显示“行情连接中断”？**
+数据来自东方财富的网页接口，公司网络可能拦截。连不上时会自动切到腾讯行情；两个都连不上时请检查代理。非交易时间每 5 分钟才刷新一次，这是正常的。
+
+**音乐、系统通知不显示？**
+这两项需要原生小助手 `PeekNative.exe`。从 Releases 下载的版本已经带了；自己打包时需要装 .NET 8 SDK，否则会跳过。系统通知还要在「设置 → 隐私和安全性 → 通知」里允许余光读取通知。
+
+**Windows 提示“未知发布者”？**
+安装包没有代码签名，点「更多信息 → 仍要运行」即可。介意的话可以自己从源码打包。
+
+**快捷键没反应？**
+可能被别的软件占用了。「设置」里对应的快捷键旁会显示“被其他软件占用”，换一个组合即可。
+
+**能用在 macOS / Linux 上吗？**
+目前只做了 Windows。界面部分是 Electron，理论上能跑，但贴顶、鼠标穿透、媒体和通知都依赖 Windows。
+
+**会把我的数据传到哪里？**
+不会。见[数据来源与隐私](#数据来源与隐私)。
+
 ## 排查问题
 
-运行日志在 `%APPDATA%/peek-island/logs/main.log`（超过 1MB 自动清空），遇到问题时把它发给开发者。
+运行日志在 `%APPDATA%/peek-island/logs/main.log`（超过 1MB 自动清空）。提 Issue 时请附上日志的相关部分（先检查里面没有你不想公开的内容）。
 
 ## 数据来源与隐私
 
 - 行情来自东方财富的公开网页接口（`push2.eastmoney.com`、`push2his.eastmoney.com`、`searchapi.eastmoney.com`），连不上时用腾讯（`qt.gtimg.cn`），都是非官方 API，可能有延迟，也可能随时变化。持仓和预警只保存在本机。仅供个人查看，不构成任何投资建议。
 - 原生小助手只读取播放信息、输出音量的峰值和通知内容，不录音、不联网。
 - 通知只在内存里；剪贴板、待办、配置保存在本机；邮箱授权码加密保存。除了行情和你配置的邮箱服务器，不向任何地方发送数据。
+
+## 参与贡献
+
+欢迎提 Issue 和 Pull Request。开始之前请看 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 致谢
+
+- 行情数据：[东方财富](https://www.eastmoney.com/)、[腾讯财经](https://gu.qq.com/)（非官方接口）
+- 部分交互和视觉细节（弹簧开合、连续圆角、页面入口的小 Dock 等）参考了 [fly-island](https://github.com/flyl1u/fly-island) 的设计文档，代码为本项目独立实现
+- 基于 [Electron](https://www.electronjs.org/)、[ImapFlow](https://github.com/postalsys/imapflow)、[Mailparser](https://github.com/nodemailer/mailparser)
+
+## 许可
+
+[MIT](LICENSE) © naolen
+
+本项目与东方财富、腾讯等数据提供方没有任何关系。行情仅供个人参考，不构成投资建议；据此操作，风险自负。

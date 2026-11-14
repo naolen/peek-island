@@ -6,3 +6,9 @@ native/**/bin/
 native/**/obj/
 *.log
 .DS_Store
+release-notes.md
+.env
+*.tgz
+.vscode/
+.idea/
+Thumbs.db
