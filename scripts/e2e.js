@@ -64,13 +64,21 @@ async function run(win) {
   };
   const formOf = () => js(`document.getElementById('morph').dataset.form`);
   const text = (id) => js(`document.getElementById('${id}').textContent`);
+  // 模拟鼠标：事件带上真实的坐标（界面会按最后的鼠标位置判断鼠标还在不在岛上）
+  const mouseTo = (where) => js(`(() => {
+    const m = document.getElementById('morph').getBoundingClientRect();
+    const [x, y] = ${where === 'island' ? '[m.left + m.width / 2, m.top + 2]' : '[4, 700]'};
+    const el = document.elementFromPoint(x, y) || document.body;
+    el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+  })()`);
   const openPanel = async () => {
-    await js(`document.getElementById('hot').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))`);
+    await mouseTo('island');
     await wait(500);
     await js(`document.getElementById('tickerZone').click()`);
     await wait(900);
   };
-  const closePanel = async () => { await js(`document.getElementById('btnClose').click()`); await wait(500); };
+  // 收起后把鼠标移开，否则会被当成“鼠标还停在岛上”
+  const closePanel = async () => { await js(`document.getElementById('btnClose').click()`); await mouseTo('away'); await wait(500); };
   const click = async (sel, ms = 500) => {
     const ok = await js(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return false; el.click(); return true; })()`);
     await wait(ms);
@@ -118,7 +126,7 @@ async function run(win) {
 
   // ---------- 1. 正常交易中 ----------
   await wait(1500);
-  await js(`document.getElementById('hot').dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))`);
+  await mouseTo('island');
   await wait(700);
   const tick = await js(`document.getElementById('ticker').textContent`);
   check('岛上有报价', /1,701\.20/.test(tick), tick);
@@ -213,7 +221,7 @@ async function run(win) {
   await closePanel();
 
   // ---------- 用快捷键唤出（鼠标不在岛上）：面板应该保持打开，不能一闪就收 ----------
-  await js(`document.getElementById('hot').dispatchEvent(new MouseEvent('mouseleave', { bubbles: true })); document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))`);
+  await mouseTo('away');
   await wait(400);
   win.webContents.send('page:open', 'clip');
   await wait(2500);
