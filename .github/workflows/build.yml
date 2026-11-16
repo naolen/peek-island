@@ -63,7 +63,7 @@ jobs:
         run: npm run native
       - name: 端到端测试（Linux）
         if: runner.os == 'Linux'
-        run: xvfb-run -a npx electron --no-sandbox scripts/e2e.js e2e-shots
+        run: xvfb-run -a npx electron --no-sandbox --disable-gpu scripts/e2e.js e2e-shots
       - name: 端到端测试（Windows）
         if: runner.os == 'Windows'
         run: npx electron scripts/e2e.js e2e-shots

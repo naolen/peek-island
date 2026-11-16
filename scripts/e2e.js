@@ -53,10 +53,14 @@ async function run(win) {
   const check = (name, ok, extra) => {
     if (ok) passed++; else failures.push(`[${state.mode}] ${name}${extra !== undefined ? ' → ' + JSON.stringify(extra) : ''}`);
   };
+  // 截图只是给人看的，截不了（没有显卡的 CI 机器上会失败）不算测试失败
+  let shotBroken = false;
   const shot = async (name) => {
-    if (!shotDir) return;
-    fs.mkdirSync(shotDir, { recursive: true });
-    fs.writeFileSync(path.join(shotDir, name + '.png'), (await win.webContents.capturePage()).toPNG());
+    if (!shotDir || shotBroken) return;
+    try {
+      fs.mkdirSync(shotDir, { recursive: true });
+      fs.writeFileSync(path.join(shotDir, name + '.png'), (await win.webContents.capturePage()).toPNG());
+    } catch (e) { shotBroken = true; info.push('截图不可用：' + (e && e.message)); }
   };
   const formOf = () => js(`document.getElementById('morph').dataset.form`);
   const text = (id) => js(`document.getElementById('${id}').textContent`);

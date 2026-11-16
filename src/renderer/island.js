@@ -1010,8 +1010,17 @@
     api.setIgnoreMouse(!inside);
     if (inside) onEnter(); else onLeave();
   }
-  document.addEventListener('mousemove', (e) => trackPointer(e.target));
-  document.addEventListener('mouseleave', () => trackPointer(null));
+  let lastX = -1, lastY = -1;
+  document.addEventListener('mousemove', (e) => { lastX = e.clientX; lastY = e.clientY; trackPointer(e.target); });
+  document.addEventListener('mouseleave', () => { lastX = lastY = -1; trackPointer(null); });
+  /**
+   * 岛变小以后（比如点了收起），鼠标可能已经不在岛上了，但鼠标没动就不会有事件。
+   * 按最后一次的鼠标位置重新判断一下，否则窗口会一直拦着点击，通知卡片也不会自动收起。
+   */
+  function recheckPointer() {
+    if (lastX < 0) { trackPointer(null); return; }
+    trackPointer(document.elementFromPoint(lastX, lastY));
+  }
 
   // ---------- 悬停意图：鼠标停够一会儿才弹气泡 ----------
   // 光带刚长成岛的那一下，鼠标是“被动”落在岛上的，不算悬停；要再停 0.55 秒才弹出
@@ -1061,7 +1070,9 @@
 
   // 变形结束后再校正一次气泡位置
   morph.addEventListener('transitionend', (e) => {
-    if (e.target === morph && e.propertyName === 'width') renderBubble();
+    if (e.target !== morph) return;
+    if (e.propertyName === 'width') renderBubble();
+    if (e.propertyName === 'width' || e.propertyName === 'height') recheckPointer();
   });
 
   // 音乐：光带上的紫色段、岛上的右半边
