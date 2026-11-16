@@ -15,6 +15,7 @@ class FakeDate extends RealDate {
 }
 global.Date = FakeDate;
 
+process.env.PEEK_E2E = '1';
 const state = { mode: 'normal' };
 global.fetch = require('./fake-market').makeFetch(state);
 
@@ -240,6 +241,58 @@ async function run(win) {
   check('面板有尺寸且可见', box[0] >= 590 && box[1] > 300 && box[2] === '1', box);
   await shot('panel-final');
   await closePanel();
+
+  // ---------- 托盘隐藏 → 再显示之后还能展开（用户报的 bug） ----------
+  {
+    const T = global.__peekTest;
+    await mouseTo('away');
+    await wait(400);
+    T.setHidden(true);
+    await wait(600);
+    check('隐藏后窗口不可见', !win.isVisible());
+    T.setHidden(false);
+    await wait(800);
+    check('再显示后窗口可见', win.isVisible());
+    check('再显示后回到光带', (await formOf()) === 'strip', await formOf());
+    check('再显示后窗口重新开始穿透', T.isIgnoring() === true);
+    const hr = T.hotRect();
+    check('界面报告了岛的范围', !!hr && hr.w > 100 && hr.h > 0, hr);
+    await openPanel();
+    check('隐藏再显示后能展开面板', (await formOf()) === 'panel', await formOf());
+    await closePanel();
+    // 面板开着时被隐藏：再显示时面板应该已经收起
+    await openPanel();
+    T.setHidden(true);
+    await wait(500);
+    T.setHidden(false);
+    await wait(800);
+    check('隐藏时面板收起', (await formOf()) !== 'panel', await formOf());
+    check('隐藏时放掉焦点', !win.isFocusable(), win.isFocusable());
+  }
+
+  // ---------- 鼠标转发失效时的兜底：用真实的光标位置（只在 Windows 上测） ----------
+  if (process.platform === 'win32') {
+    const T = global.__peekTest;
+    const { execFileSync } = require('child_process');
+    const ps = (code) => execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+      'Add-Type -Namespace W -Name U -MemberDefinition \'[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);\'; ' + code], { timeout: 20000 });
+    const moveTo = (x, y) => ps(`[W.U]::SetCursorPos(${Math.round(x)}, ${Math.round(y)}) | Out-Null`);
+    const { screen } = require('electron');
+    const sf = screen.getPrimaryDisplay().scaleFactor;
+    const b = win.getBounds();
+    try {
+      moveTo((b.x + b.width / 2) * sf, 600 * sf); // 先移开
+      await wait(600);
+      T.breakForwarding();                        // 模拟 Windows 上转发失效
+      await wait(300);
+      moveTo((b.x + b.width / 2) * sf, (b.y + 1) * sf); // 移到光带上
+      await wait(1500);
+      const f = await formOf();
+      check('转发失效时，光标移到光带上也能变成岛', f === 'island', f);
+      moveTo((b.x + b.width / 2) * sf, 600 * sf);
+      await wait(2200);
+    } catch (e) { info.push('真实光标测试跳过：' + (e && e.message)); }
+  }
 
   // ---------- 3. 设置窗口 ----------
   await js(`window.peek.openSettings && window.peek.openSettings('stock')`);

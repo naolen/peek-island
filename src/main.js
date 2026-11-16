@@ -68,6 +68,15 @@ if (!app.requestSingleInstanceLock()) {
 // 配置在 ready 之前就要读：省内存模式要在 ready 之前关掉 GPU 加速
 store = new ConfigStore(app.getPath('userData'));
 if (store.recovered) log('[config] 配置文件损坏，已从备份恢复');
+// 端到端测试用（scripts/e2e.js 会设置 PEEK_E2E=1）
+if (process.env.PEEK_E2E) {
+  global.__peekTest = {
+    setHidden: (h) => setHidden(h),
+    isIgnoring: () => ignoring,
+    breakForwarding: () => { if (islandWin) islandWin.setIgnoreMouseEvents(true); }, // 模拟转发失效：只穿透、不转发
+    hotRect: () => hotRect
+  };
+}
 if (store.get().lowMemory) {
   app.disableHardwareAcceleration();
 }
@@ -110,9 +119,54 @@ let lastFullscreen = null;
 function applyVisibility() {
   if (!islandWin || islandWin.isDestroyed()) return;
   const show = !hidden && !fsHidden;
-  if (show && !islandWin.isVisible()) { placeIsland(); islandWin.showInactive(); islandWin.setAlwaysOnTop(true, 'screen-saver'); }
-  else if (!show && islandWin.isVisible()) islandWin.hide();
+  if (show && !islandWin.isVisible()) {
+    placeIsland();
+    islandWin.showInactive();
+    islandWin.setAlwaysOnTop(true, 'screen-saver');
+    // Windows 上窗口隐藏再显示后，“穿透 + 转发鼠标移动”可能失效，界面就收不到鼠标、展不开。
+    // 每次显示都重新设一遍，并让界面把悬停 / 展开状态清空
+    setIgnore(true, true);
+    islandWin.webContents.send('island:shown');
+    log('[island] 显示');
+  } else if (!show && islandWin.isVisible()) {
+    // 隐藏前收起面板、放掉焦点，免得下次显示时还停在半截状态
+    islandWin.webContents.send('island:hidden');
+    setIslandFocus(false);
+    islandWin.hide();
+    log('[island] 隐藏', hidden ? '（手动）' : '（全屏）');
+  }
 }
+
+// ---------- 鼠标穿透 ----------
+// 平时窗口对鼠标“透明”（点击直接落到下面的软件上），只把鼠标移动转发给界面；
+// 界面发现鼠标移到岛上时，再让窗口接管鼠标（见 island.js 的 trackPointer）。
+let ignoring = true;
+function setIgnore(ignore, force) {
+  if (!islandWin || islandWin.isDestroyed()) return;
+  if (!force && ignore === ignoring) return;
+  ignoring = ignore;
+  if (force) islandWin.setIgnoreMouseEvents(false); // 先关再开，强制 Windows 重新注册转发
+  islandWin.setIgnoreMouseEvents(ignore, { forward: true });
+}
+
+// 兜底：万一转发失效（隐藏 / 显示、换屏幕、睡眠唤醒之后都出现过），界面就收不到鼠标。
+// 主进程每 60 毫秒看一次光标是不是在岛的范围里，在的话直接让窗口接管鼠标。只比较几个数字，几乎不占资源。
+let hotRect = null; // 界面报告的岛的范围（相对窗口，单位和屏幕坐标一致）
+let pointerTimer = null;
+function startPointerWatch() {
+  clearInterval(pointerTimer);
+  pointerTimer = setInterval(() => {
+    if (!ignoring || !hotRect || !islandWin || islandWin.isDestroyed() || !islandWin.isVisible()) return;
+    const p = screen.getCursorScreenPoint();
+    const b = islandWin.getBounds();
+    const x = p.x - b.x, y = p.y - b.y;
+    if (x >= hotRect.x && x <= hotRect.x + hotRect.w && y >= hotRect.y && y <= hotRect.y + hotRect.h) {
+      setIgnore(false);
+      islandWin.webContents.send('pointer:enter');
+    }
+  }, 60);
+}
+
 
 function createIsland() {
   islandWin = new BrowserWindow({
@@ -142,7 +196,7 @@ function createIsland() {
   });
   islandWin.setAlwaysOnTop(true, 'screen-saver');
   islandWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  islandWin.setIgnoreMouseEvents(true, { forward: true });
+  setIgnore(true, true);
   // 共享屏幕、截图、录屏时看不到岛（Windows 10 2004 及以上）
   if (store.get().hideInCapture) setCapture(true);
   placeIsland();
@@ -796,7 +850,13 @@ function setupIpc() {
   });
   ipcMain.on('mouse:ignore', (e, ignore) => {
     const w = BrowserWindow.fromWebContents(e.sender);
-    if (w && w === islandWin) w.setIgnoreMouseEvents(!!ignore, { forward: true });
+    if (w && w === islandWin) setIgnore(!!ignore);
+  });
+  ipcMain.on('hot:rect', (e, r) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w || w !== islandWin || !r) return;
+    const n = (v) => (Number.isFinite(v) ? v : 0);
+    hotRect = { x: n(r.x), y: n(r.y), w: Math.max(0, n(r.w)), h: Math.max(0, n(r.h)) };
   });
   ipcMain.handle('media:get', () => media);
   ipcMain.on('media:cmd', (_e, cmd) => {
@@ -881,7 +941,15 @@ app.whenReady().then(() => {
   }
   setupNative();
   // 电脑从睡眠中醒来：马上刷新一次，并把岛放回原位（睡眠期间屏幕可能变了）
-  powerMonitor.on('resume', () => { log('[power] 唤醒'); placeIsland(); applyVisibility(); poll(); });
+  powerMonitor.on('resume', () => {
+    log('[power] 唤醒');
+    placeIsland();
+    applyVisibility();
+    // 睡眠唤醒后也重新注册一次鼠标转发
+    if (islandWin && islandWin.isVisible()) { setIgnore(true, true); islandWin.webContents.send('island:shown'); }
+    poll();
+  });
+  startPointerWatch();
   screen.on('display-metrics-changed', placeIsland);
   screen.on('display-added', placeIsland);
   screen.on('display-removed', placeIsland);

@@ -121,6 +121,7 @@
     renderBubble();
     for (const el of segsEl.children) el.classList.toggle('hot', f === 'strip' && st.hot === Number(el.dataset.i));
     $('musicSeg').classList.toggle('hot', f === 'strip' && st.hot === 'musicSeg');
+    requestAnimationFrame(reportHot);
   }
 
   // ---------- 光带 ----------
@@ -1022,6 +1023,48 @@
     trackPointer(document.elementFromPoint(lastX, lastY));
   }
 
+  // 把岛的范围告诉主进程：主进程在鼠标转发失效时靠它判断光标是不是到了岛上
+  let lastHot = '';
+  function reportHot() {
+    if (!api.reportHot) return;
+    const r = $('hot').getBoundingClientRect();
+    const v = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+    const k = v.x + ',' + v.y + ',' + v.w + ',' + v.h;
+    if (k === lastHot) return;
+    lastHot = k;
+    api.reportHot(v);
+  }
+  if (window.ResizeObserver) new ResizeObserver(reportHot).observe($('hot'));
+  if (api.onPointerEnter) {
+    // 主进程发现光标到了岛上（转发失效时的兜底）
+    api.onPointerEnter(() => {
+      if (st.inside) return;
+      st.inside = true;
+      if (st.open) st.enteredPanel = true;
+      onEnter();
+    });
+    // 窗口重新显示：之前的悬停、展开状态都作废
+    api.onIslandShown(() => {
+      st.inside = false;
+      st.hover = false;
+      st.hot = null;
+      lastX = lastY = -1;
+      clearTimeout(hoverTimer);
+      clearTimeout(leaveTimer);
+      if (st.open) closePanel('shown'); else applyForm();
+      lastHot = '';
+      reportHot();
+    });
+    api.onIslandHidden(() => {
+      clearTimeout(hoverTimer);
+      clearTimeout(leaveTimer);
+      st.inside = false;
+      st.hover = false;
+      st.hot = null;
+      if (st.open) closePanel('hidden'); else applyForm();
+    });
+  }
+
   // ---------- 悬停意图：鼠标停够一会儿才弹气泡 ----------
   // 光带刚长成岛的那一下，鼠标是“被动”落在岛上的，不算悬停；要再停 0.55 秒才弹出
   const HOVER_DELAY = 550;
@@ -1072,7 +1115,7 @@
   morph.addEventListener('transitionend', (e) => {
     if (e.target !== morph) return;
     if (e.propertyName === 'width') renderBubble();
-    if (e.propertyName === 'width' || e.propertyName === 'height') recheckPointer();
+    if (e.propertyName === 'width' || e.propertyName === 'height') { recheckPointer(); reportHot(); }
   });
 
   // 音乐：光带上的紫色段、岛上的右半边
@@ -2034,6 +2077,7 @@
     const c = st.cfg;
     const root = document.documentElement.style;
     root.setProperty('--scale', String(Number(c.scale) || 1));
+    setTimeout(reportHot, 50); // 缩放变了，岛的范围也变了
     // 透明度只作用在岛的底色上，文字保持清晰；低调模式整体再淡一些
     root.setProperty('--fill-alpha', String(Number(c.opacity) || 1));
     root.setProperty('--opacity', String(st.stealth ? (Number(c.stealthOpacity) || 0.7) : 1));
