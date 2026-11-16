@@ -1038,13 +1038,14 @@
   if (api.onPointerEnter) {
     // 主进程发现光标到了岛上（转发失效时的兜底）
     api.onPointerEnter(() => {
-      if (st.inside) return;
+      if (!st.cfg || st.inside) return;
       st.inside = true;
       if (st.open) st.enteredPanel = true;
       onEnter();
     });
     // 窗口重新显示：之前的悬停、展开状态都作废
     api.onIslandShown(() => {
+      if (!st.cfg) return; // 第一次显示时界面可能还没初始化完，没有旧状态要清
       st.inside = false;
       st.hover = false;
       st.hot = null;
@@ -1056,6 +1057,7 @@
       reportHot();
     });
     api.onIslandHidden(() => {
+      if (!st.cfg) return;
       clearTimeout(hoverTimer);
       clearTimeout(leaveTimer);
       st.inside = false;
