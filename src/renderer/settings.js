@@ -610,6 +610,8 @@
     $('stealthDays').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) => `<button type="button" class="day" data-d="${d}" aria-pressed="${cfg.stealthDays.includes(d)}">${WEEK[d]}</button>`).join('');
     $('hideInCapture').value = cfg.hideInCapture ? '1' : '0';
     $('lowMemory').value = cfg.lowMemory ? '1' : '0';
+    $('hideOnFullscreen').value = cfg.hideOnFullscreen ? '1' : '0';
+    renderDisplays();
     $('stealthNow').textContent = '现在：' + (stealthOn ? '已开启' : '未开启');
   }
   $('stealth').addEventListener('change', () => save({ stealth: $('stealth').value === '1' }));
@@ -627,6 +629,20 @@
   });
   $('hideInCapture').addEventListener('change', () => save({ hideInCapture: $('hideInCapture').value === '1' }));
   $('lowMemory').addEventListener('change', () => save({ lowMemory: $('lowMemory').value === '1' }));
+  $('hideOnFullscreen').addEventListener('change', () => save({ hideOnFullscreen: $('hideOnFullscreen').value === '1' }));
+  // 显示器：只有一块屏幕时不显示这一项
+  let displays = [];
+  function renderDisplays() {
+    $('displayRow').style.display = displays.length > 1 ? '' : 'none';
+    $('display').innerHTML = '<option value="primary">跟随主屏幕</option>' + displays.map((d) => `<option value="${esc(d.id)}">${esc(d.label)}</option>`).join('');
+    $('display').value = displays.some((d) => d.id === cfg.display) ? cfg.display : 'primary';
+  }
+  $('display').addEventListener('change', () => save({ display: $('display').value }));
+  if (api.getDisplays) {
+    const loadDisplays = () => api.getDisplays().then((d) => { displays = d || []; if (cfg) renderDisplays(); });
+    loadDisplays();
+    window.addEventListener('focus', loadDisplays);
+  }
   if (api.getStealth) {
     api.getStealth().then((on) => { stealthOn = !!on; if (cfg) renderStealth(); });
     api.onStealth((on) => { stealthOn = !!on; if (cfg) renderStealth(); });
@@ -709,6 +725,38 @@
   }
   if (api.appInfo) api.appInfo().then((info) => { $('appVersion').textContent = info.version; });
   $('openRepo').addEventListener('click', () => api.openLink('https://github.com/naolen/peek-island'));
+  // 检查更新
+  let updateUrl = null;
+  $('checkUpdate').addEventListener('click', async () => {
+    const btn = $('checkUpdate');
+    if (updateUrl) { api.openLink(updateUrl); return; }
+    btn.disabled = true;
+    $('updateHint').textContent = '正在检查…';
+    const r = await api.checkUpdate().catch(() => null);
+    btn.disabled = false;
+    if (!r || !r.ok) $('updateHint').textContent = '检查失败：' + ((r && r.error) || '连不上 GitHub') + '。可以直接打开仓库的 Releases 页面看';
+    else if (r.newer) { $('updateHint').textContent = `有新版本 ${r.latest}（当前 ${r.current}）`; btn.textContent = '去下载'; btn.classList.add('primary'); updateUrl = r.url; }
+    else $('updateHint').textContent = `已经是最新版本（${r.current}）`;
+  });
+  $('openLog').addEventListener('click', () => api.openFolder('log'));
+  $('openData').addEventListener('click', () => api.openFolder('data'));
+  // 恢复默认：要点两次
+  let resetArmed = null;
+  $('resetConfig').addEventListener('click', async () => {
+    const btn = $('resetConfig');
+    if (!resetArmed) {
+      btn.textContent = '再点一次确认';
+      btn.classList.add('danger');
+      resetArmed = setTimeout(() => { resetArmed = null; btn.textContent = '恢复默认'; btn.classList.remove('danger'); }, 4000);
+      return;
+    }
+    clearTimeout(resetArmed);
+    resetArmed = null;
+    btn.classList.remove('danger');
+    await api.resetConfig();
+    btn.textContent = '已恢复';
+    setTimeout(() => { btn.textContent = '恢复默认'; }, 2000);
+  });
   if (api.onSettingsSection) api.onSettingsSection((s) => showSection(s));
 
   let initial = 'general';

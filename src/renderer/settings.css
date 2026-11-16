@@ -178,3 +178,7 @@ input[type="range"] { width: 100%; accent-color: #5B8CFF; height: 34px; }
 .day { width: 34px; height: 34px; border-radius: 17px; border: 1px solid #2E323A; background: transparent; color: #C4C8CE; cursor: pointer; }
 .day[aria-pressed="true"] { background: #5B8CFF; border-color: #5B8CFF; color: #fff; }
 input[type="time"] { color-scheme: dark; width: 110px; }
+
+.btn.danger { border-color: #FF8A8A; color: #FF8A8A; }
+.btn.primary { background: #5B8CFF; border-color: #5B8CFF; color: #fff; }
+.btn:disabled { opacity: .5; cursor: default; }

@@ -108,6 +108,8 @@ body.floating #morph::after { -webkit-mask-image: none; mask-image: none; }
 #morph[data-form="island"] { background: var(--island); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
 #morph[data-form="panel"] { background: var(--island); box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
 #morph[data-form="alert"] { background: var(--island); box-shadow: 0 14px 36px rgba(0, 0, 0, .4); }
+#morph[data-form="welcome"] { background: var(--island); box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+#morph[data-form="welcome"]::after { opacity: 1; }
 
 .layer {
   position: absolute;
@@ -120,7 +122,8 @@ body.floating #morph::after { -webkit-mask-image: none; mask-image: none; }
 #morph[data-form="strip"] #strip,
 #morph[data-form="island"] #island,
 #morph[data-form="panel"] #panel,
-#morph[data-form="alert"] #alert {
+#morph[data-form="alert"] #alert,
+#morph[data-form="welcome"] #welcome {
   transform: none;
   transition: opacity .24s ease .12s, transform .56s var(--ease-open-fallback) .12s;
 }
@@ -132,7 +135,8 @@ body.floating #morph::after { -webkit-mask-image: none; mask-image: none; }
 #morph[data-form="strip"] #strip,
 #morph[data-form="island"] #island,
 #morph[data-form="panel"] #panel,
-#morph[data-form="alert"] #alert { opacity: 1; pointer-events: auto; }
+#morph[data-form="alert"] #alert,
+#morph[data-form="welcome"] #welcome { opacity: 1; pointer-events: auto; }
 
 /* ---------- 形态一：光带 ---------- */
 #strip { left: 0; right: 0; top: 0; height: 14px; display: flex; gap: 10px; }
@@ -250,7 +254,6 @@ body.has-music #musicSeg { display: block; }
 .time-axis span:last-child { transform: translateX(-100%); }
 
 .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.chips:has(.chip:nth-child(5)) { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .chip {
   position: relative;
   height: 46px;
@@ -640,3 +643,33 @@ body.stealth .chip.flagged { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35
 body.stealth .alert-pill.on { background: rgba(255, 255, 255, .08); color: var(--text-2); }
 body.stealth .rule.on { background: rgba(255, 255, 255, .08); }
 body.stealth .sw:checked { background: #C9CCD1; }
+
+/* ---------- 行情断线：数字变淡，圆点变成空心 ---------- */
+body.offline #ticker { opacity: .5; }
+body.offline #tickDot { background: transparent !important; box-shadow: inset 0 0 0 1.5px var(--amber); }
+body.offline .seg-item .light { opacity: .3 !important; animation: none; }
+
+/* ---------- 添加股票 ---------- */
+.chip-add { color: var(--text-3); background: transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
+.chip-add:hover { color: var(--text-1); background: rgba(255, 255, 255, .06); }
+#addSheet .field-input { height: 36px; }
+.ad-list { display: flex; flex-direction: column; gap: 2px; min-height: 44px; }
+.ad-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 64px 84px; gap: 10px; align-items: center; height: 36px; padding: 0 10px; border: none; border-radius: 10px; background: transparent; color: var(--text-1); font-size: 13px; text-align: left; cursor: pointer; }
+.ad-row:hover:not(:disabled), .ad-row.hi:not(:disabled) { background: rgba(255, 255, 255, .08); }
+.ad-row:disabled { color: var(--text-ph); cursor: default; }
+.ad-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ad-code, .ad-type { font-size: 12px; color: var(--text-3); }
+.ad-act { font-size: 12px; color: var(--text-2); text-align: right; }
+.ad-row.hi:not(:disabled) .ad-act { color: var(--text-1); }
+
+/* ---------- 第一次启动的欢迎卡片 ---------- */
+#welcome { left: 0; right: 0; top: 0; padding: 20px 24px 18px; display: flex; flex-direction: column; gap: 10px; }
+.wl-title { font-size: 17px; font-weight: 600; color: var(--text-1); }
+.wl-text { font-size: 13px; line-height: 1.6; color: var(--text-2); }
+.wl-tips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 2px; }
+.wl-tips span { display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; border-radius: 12px; background: rgba(255, 255, 255, .05); font-size: 12px; color: var(--text-3); }
+.wl-tips b { font-size: 12px; font-weight: 600; color: var(--text-1); white-space: nowrap; }
+.wl-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+/* 关掉欢迎卡片后，光带亮一下，让人看到它缩到哪去了 */
+@keyframes hereGlow { 0%, 100% { filter: none; } 30%, 70% { filter: brightness(2.2) drop-shadow(0 0 10px rgba(255, 255, 255, .7)); } }
+body.here #strip { animation: hereGlow 1.1s ease-in-out 2; }

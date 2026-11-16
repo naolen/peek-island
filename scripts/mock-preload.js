@@ -52,6 +52,7 @@ for (const [c, [name, price, pct]] of Object.entries(base)) {
 }
 const idx = { sh000001: ['上证指数', 3412.56, 0.45], sz399001: ['深证成指', 10988.2, 0.82], sz399006: ['创业板指', 2286.4, 1.36], giHSI: ['恒生指数', 26120.3, -0.38], giNDX: ['纳斯达克100', 21530.8, 0.91] };
 for (const [c, [name, price, pct]] of Object.entries(idx)) quotes[c] = { code: c, name, price, prevClose: price / (1 + pct / 100), pct, change: 0, open: price, high: price * 1.004, low: price * 0.993, volume: 3.2e8, amount: 4.1e11, time: Date.now() };
+cfg.welcomed = true;
 cfg.holdings = sanitize({ holdings: { hk00700: { qty: 200, cost: 452 }, sh601318: { qty: 1000, cost: 48.2 }, sh600519: { qty: 100, cost: 1550 }, hk03690: { qty: 300, cost: 160 } } }).holdings;
 cfg.alerts = sanitize({ alerts: { sh600519: { upOn: true, up: 1700, downOn: true, down: 1650 }, sh688981: { fastOn: true, fast: 2 } } }).alerts;
 const pnl = require('../src/pnl');
@@ -99,6 +100,7 @@ contextBridge.exposeInMainWorld('peek', {
   getStealth: async () => false, toggleStealth: () => {}, onStealth: (cb) => lis.stealth.push(cb),
   getFx: async () => ({ USD: 7.18, HKD: 0.921, auto: true }), onFx: () => {},
   getPnl: async () => pnlState(), onPnl: (cb) => lis.pnl.push(cb),
+  log: () => {}, checkUpdate: async () => ({ ok: true, current: '0.3.0', latest: '0.3.0', newer: false }), openFolder: () => {}, resetConfig: async () => cfg, getDisplays: async () => [{ id: '1', primary: true, label: '屏幕 1（主屏幕） · 2560×1440' }, { id: '2', primary: false, label: '屏幕 2 · 1920×1080' }],
   onAlert: (cb) => lis.alert.push(cb), describeAlert: async () => '', copyText: async () => true,
   exportGroups: async () => ({ ok: false }), importGroups: async () => ({ ok: false }),
   memory: async () => ({ totalMB: 214, processes: 5, gpu: 48, native: 22 }),
@@ -152,7 +154,7 @@ contextBridge.exposeInMainWorld('peek', {
   onMailStatus: () => {},
   getLoginItem: async () => true,
   setLoginItem: async (on) => on,
-  appInfo: async () => ({ version: '0.2.0' }),
+  appInfo: async () => ({ version: require('../package.json').version }),
   openLink: () => {},
   onSettingsSection: () => {},
   setFocus: () => {},

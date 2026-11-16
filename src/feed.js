@@ -1,6 +1,8 @@
 // 网络请求：拉取实时报价、分时、搜索（东方财富公开接口）。在主进程里运行，避免渲染进程的跨域限制。
+const { getText } = require('./http');
 const { toSecids, quotesUrl, parseQuotes, minuteUrl, parseMinute, klineUrl, parseKline, bookUrl, parseBook, searchUrl, parseSearch, tencentUrl, parseTencent } = require('./quotes');
 
+// Referer 只能写成“协议 + 域名 + /”，带路径会被 Chromium 的来源策略拦掉（见 http.js）
 const HEADERS = {
   Referer: 'https://quote.eastmoney.com/',
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
@@ -9,46 +11,43 @@ const HEADERS = {
 // 美股代码实际在哪个交易所（105 / 106 / 107），第一次查到后记住，之后只请求一个
 const usMarket = {};
 
-async function get(url, { timeoutMs = 6000, encoding } = {}) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { headers: HEADERS, signal: ctrl.signal });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    if (encoding) return new TextDecoder(encoding).decode(await res.arrayBuffer());
-    return await res.text();
-  } finally {
-    clearTimeout(t);
-  }
+/** 请求一个行情接口。走系统代理、不用缓存（见 http.js） */
+function get(url, opts) {
+  return getText(url, Object.assign({ headers: HEADERS }, opts));
 }
 
 // 当前用的数据源：eastmoney / tencent。东方财富连续失败时切到腾讯，之后每 5 分钟试一次切回来
 let source = 'eastmoney';
 let fallbackAt = 0;
 
-/** 批量拉报价，东方财富失败时自动用腾讯 */
+/** 批量拉报价，东方财富失败时自动用腾讯；两边都拿不到数据时抛错（上层显示“连接中断”） */
 async function fetchQuotes(codes) {
   if (!codes.length) return {};
+  const needsStock = codes.some((c) => !/^(gi|fx)/.test(c));
   if (source === 'tencent' && Date.now() - fallbackAt < 5 * 60 * 1000) {
-    try { return Object.assign(await fetchTencent(codes), await fetchEastmoneyOnly(codes.filter((c) => /^gi/.test(c)), true)); }
-    catch (e) { source = 'eastmoney'; }
+    try {
+      const out = await fetchTencent(codes);
+      if (Object.keys(out).length || !needsStock) return Object.assign(out, await fetchEastmoneyOnly(codes.filter((c) => /^gi/.test(c)), true));
+    } catch (e) { /* 腾讯也不行了，回头再试东方财富 */ }
+    source = 'eastmoney';
   }
+  let firstError = null;
   try {
     const out = await fetchEastmoney(codes);
-    if (Object.keys(out).length || !codes.some((c) => !/^gi/.test(c))) { source = 'eastmoney'; return out; }
-    throw new Error('东方财富没有返回数据');
-  } catch (e) {
-    const out = await fetchTencent(codes); // 也失败就把错误抛给上层
-    source = 'tencent';
-    fallbackAt = Date.now();
-    return out;
-  }
+    if (Object.keys(out).length || !needsStock) { source = 'eastmoney'; return out; }
+    firstError = new Error('东方财富没有返回数据');
+  } catch (e) { firstError = e; }
+  const out = await fetchTencent(codes); // 也失败就把错误抛给上层
+  if (!Object.keys(out).length && needsStock) throw firstError;
+  source = 'tencent';
+  fallbackAt = Date.now();
+  return out;
 }
 
 async function fetchTencent(codes) {
   const url = tencentUrl(codes);
   if (!url) return {};
-  return parseTencent(await get(url, { encoding: 'gbk' }));
+  return parseTencent(await get(url, { encoding: 'gbk', headers: Object.assign({}, HEADERS, { Referer: 'https://gu.qq.com/' }) }));
 }
 
 async function fetchEastmoneyOnly(codes, quiet) {

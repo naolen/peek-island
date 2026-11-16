@@ -27,8 +27,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -37,18 +37,56 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm test
 
+  # 端到端：真实的主进程 + 界面，行情换成假服务器（scripts/fake-market.js）。
+  # Linux 上用虚拟屏幕跑；Windows 上再跑一遍，连同原生小助手一起，检查窗口、焦点这些只有 Windows 才有的行为
+  e2e:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/setup-dotnet@v6
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: '8.0.x'
+      - name: 编译原生小助手
+        if: runner.os == 'Windows'
+        run: npm run native
+      - name: 端到端测试（Linux）
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npx electron --no-sandbox scripts/e2e.js e2e-shots
+      - name: 端到端测试（Windows）
+        if: runner.os == 'Windows'
+        run: npx electron scripts/e2e.js e2e-shots
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-shots-${{ matrix.os }}
+          path: e2e-shots/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   windows:
     needs: test
     runs-on: windows-latest
     permissions:
       contents: write # 发布 Release 需要
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
       - run: npm ci
@@ -76,7 +114,7 @@ jobs:
         run: |
           Get-ChildItem dist/*.exe | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), $_.Name } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
           Get-Content dist/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: peek-island-windows
           path: |

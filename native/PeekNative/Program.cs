@@ -4,6 +4,7 @@
 //     {"type":"media", ...}        见 MediaWatcher
 //     {"type":"level","peak":0.42} 默认输出设备的实时峰值 0..1
 //     {"type":"clipboard","seq":123} 剪贴板内容变了
+//     {"type":"fullscreen","on":true,"primary":true} 前台窗口进入 / 退出全屏（见 ForegroundWatcher）
 //     {"type":"error","message":"..."}
 //   stdin 每行一条 JSON 命令：
 //     {"cmd":"toggle"} / {"cmd":"play"} / {"cmd":"pause"} / {"cmd":"next"} / {"cmd":"prev"}
@@ -38,7 +39,7 @@ internal static class Program
     {
         Console.OutputEncoding = new UTF8Encoding(false);
         Console.InputEncoding = new UTF8Encoding(false);
-        Send(new { type = "ready", version = "0.2.0" });
+        Send(new { type = "ready", version = "0.3.0" });
 
         var media = new MediaWatcher(Send);
         try { await media.StartAsync(); }
@@ -49,6 +50,7 @@ internal static class Program
         var cts = new CancellationTokenSource();
         _ = Task.Run(() => LevelLoop(cts.Token));
         _ = Task.Run(() => ClipboardLoop(cts.Token));
+        _ = Task.Run(() => ForegroundWatcher.Loop(Send, cts.Token));
 
         string? line;
         while ((line = await Console.In.ReadLineAsync()) != null)

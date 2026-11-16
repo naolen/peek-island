@@ -70,6 +70,12 @@ const DEFAULTS = {
   stealthStart: '09:00',
   stealthEnd: '18:00',
   stealthDays: [1, 2, 3, 4, 5],
+  // 第一次启动时显示欢迎卡片，看过后置为 true
+  welcomed: false,
+  // 前台有全屏窗口（视频、游戏、放映）时自动隐藏岛（需要原生小助手）
+  hideOnFullscreen: true,
+  // 显示在哪块屏幕：'primary' 主屏幕，或者屏幕的编号（设置里选）
+  display: 'primary',
   // 省内存模式：关掉 GPU 加速（重启后生效）
   lowMemory: false,
   // 共享屏幕、截图、录屏时自动隐藏岛（别人看不到，自己照常看得到）。
@@ -150,6 +156,9 @@ function sanitize(cfg) {
   out.stealth = out.stealth === true;
   out.hideInCapture = out.hideInCapture === true;
   out.lowMemory = out.lowMemory === true;
+  out.welcomed = out.welcomed === true;
+  out.hideOnFullscreen = out.hideOnFullscreen !== false;
+  out.display = typeof out.display === 'string' && /^(primary|\d{1,20})$/.test(out.display) ? out.display : 'primary';
   out.stealthSchedule = out.stealthSchedule === true;
   if (typeof out.stealthKey !== 'string') out.stealthKey = DEFAULTS.stealthKey;
   out.stealthKey = out.stealthKey.trim().slice(0, 40);
@@ -240,10 +249,27 @@ function clampNum(v, min, max, dflt) {
 class ConfigStore {
   constructor(dir) {
     this.file = path.join(dir, 'config.json');
-    this.data = sanitize(this.read());
+    this.backup = path.join(dir, 'config.bak.json');
+    let raw = this.read(this.file);
+    if (raw) {
+      // 能读出来：留一份备份，下次配置文件坏了可以找回
+      try { fs.copyFileSync(this.file, this.backup); } catch (e) { /* 备份失败不影响使用 */ }
+      // 老用户升级上来（配置里还没有这一项）：不再弹欢迎卡片
+      if (raw.welcomed === undefined) raw.welcomed = true;
+    } else if (fs.existsSync(this.file)) {
+      // 文件在但读不出来（写到一半断电之类）：把坏文件留着，用备份恢复
+      try { fs.renameSync(this.file, path.join(dir, 'config.broken-' + Date.now() + '.json')); } catch (e) { /* ignore */ }
+      raw = this.read(this.backup);
+      this.recovered = !!raw;
+      if (raw && raw.welcomed === undefined) raw.welcomed = true;
+    }
+    this.data = sanitize(raw);
   }
-  read() {
-    try { return JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch (e) { return null; }
+  read(file) {
+    try {
+      const obj = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : null;
+    } catch (e) { return null; }
   }
   get() { return this.data; }
   set(patch) {

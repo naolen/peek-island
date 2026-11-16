@@ -86,6 +86,14 @@
           <div class="set-label">老板键 <span id="bossKeyStatus" class="key-status"></span><span class="set-desc">一键隐藏 / 显示，例如 Control+Alt+S</span></div>
           <input id="bossKey" class="input" placeholder="Control+Alt+S">
         </div>
+        <div class="set-row" id="displayRow">
+          <div class="set-label">显示在哪块屏幕</div>
+          <select id="display" class="input"></select>
+        </div>
+        <div class="set-row">
+          <div class="set-label">全屏时自动隐藏<span class="set-desc">看视频、打游戏、放幻灯片全屏时把岛藏起来，退出全屏后自动回来（需要原生小助手）</span></div>
+          <select id="hideOnFullscreen" class="input"><option value="1">开启</option><option value="0">关闭</option></select>
+        </div>
         <div class="set-row">
           <div class="set-label">省内存模式<span class="set-desc">关掉 GPU 加速，少一个进程，能省几十到上百 MB；毛玻璃效果会没那么顺滑。重启余光后生效</span></div>
           <select id="lowMemory" class="input"><option value="0">关闭</option><option value="1">开启</option></select>
@@ -418,9 +426,28 @@
         <div class="about-head"><span class="brand-mark big" aria-hidden="true"></span><div><div class="about-name">余光 Peek Island</div><div class="hint">版本 <span id="appVersion" class="num"></span></div></div></div>
         <p>贴在屏幕顶部的“灵动岛”：行情、音乐、消息通知、邮箱、剪贴板、待办。</p>
         <p class="hint">行情数据来自东方财富公开接口，可能有延迟，仅供个人查看，不构成任何投资建议。</p>
-        <p class="hint">除了行情和你配置的邮箱服务器，余光不向任何地方发送数据。</p>
+        <p class="hint">除了行情和你配置的邮箱服务器，余光不向任何地方发送数据。只有点「检查更新」时会访问一次 GitHub。</p>
         <p class="hint">当前占用内存：<span id="memNow" class="num">--</span></p>
-        <div class="row"><button id="openRepo" class="btn" type="button">打开 GitHub 仓库</button></div>
+        <div class="row">
+          <button id="checkUpdate" class="btn" type="button">检查更新</button>
+          <button id="openRepo" class="btn" type="button">打开 GitHub 仓库</button>
+          <span id="updateHint" class="hint" role="status"></span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">排查问题</div>
+        <div class="set-row">
+          <div class="set-label">运行日志<span class="set-desc">遇到问题时，把日志里相关的几行附在 Issue 里（先看看有没有不想公开的内容）</span></div>
+          <button id="openLog" class="btn" type="button">打开日志位置</button>
+        </div>
+        <div class="set-row">
+          <div class="set-label">数据文件夹<span class="set-desc">配置、剪贴板历史、待办都在这里，备份或换电脑时整个复制走就行</span></div>
+          <button id="openData" class="btn" type="button">打开文件夹</button>
+        </div>
+        <div class="set-row">
+          <div class="set-label">恢复默认设置<span class="set-desc">外观、快捷键、各项开关回到默认；分组、持仓、预警、邮箱不动</span></div>
+          <button id="resetConfig" class="btn" type="button">恢复默认</button>
+        </div>
       </div>
     </section>
 

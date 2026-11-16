@@ -50,6 +50,21 @@
       </button>
     </div>
 
+    <!-- 第一次启动：告诉用户岛在哪、怎么用 -->
+    <div id="welcome" class="layer" role="dialog" aria-label="欢迎使用余光">
+      <div class="wl-title">余光在这里</div>
+      <div class="wl-text">平时它只是屏幕顶部正中的一条细光。鼠标移上来会变成岛，点一下展开成面板。</div>
+      <div class="wl-tips">
+        <span><b>滚轮</b>换分组</span>
+        <span><b id="wlBoss">Ctrl + Alt + S</b>一键隐藏</span>
+        <span><b>托盘图标</b>右键是菜单</span>
+      </div>
+      <div class="wl-foot">
+        <button id="wlAdd" class="btn primary" type="button">添加我的股票</button>
+        <button id="wlOk" class="btn" type="button">知道了</button>
+      </div>
+    </div>
+
     <!-- 形态三：展开面板 -->
     <div id="panel" class="layer" role="dialog" aria-label="行情" data-page="stock">
       <div class="panel-head">
@@ -166,6 +181,20 @@
           <button id="asCancel" class="btn" type="button">取消</button>
           <button id="asSave" class="btn primary" type="button">保存</button>
         </div>
+      </div>
+
+      <!-- 添加股票 -->
+      <div id="addSheet" class="sheet" role="dialog" aria-label="添加股票">
+        <div class="sheet-head">
+          <span id="adTitle" class="sheet-title"></span>
+          <span id="adCount" class="num sub"></span>
+          <span class="spacer"></span>
+          <button id="adClose" class="icon-btn" type="button" aria-label="关闭">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <input id="adInput" class="field-input" placeholder="代码 / 拼音首字母 / 名称，如 600519、gzmt、腾讯、NVDA" autocomplete="off" spellcheck="false">
+        <div id="adList" class="ad-list" role="listbox"></div>
       </div>
 
       <!-- 持仓编辑 -->

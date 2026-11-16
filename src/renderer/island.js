@@ -17,6 +17,7 @@
     us: [[0, '09:30'], [150 / 390, '12:00'], [270 / 390, '14:00'], [1, '16:00']]
   };
   const W = 564, VH = 30;
+  const MAX_PER_GROUP = 8;
   const SIZES = { strip: [400, 4, 4], island: [340, 36, 18] };
 
   const st = {
@@ -67,9 +68,9 @@
   // 低调模式不用红绿：涨用浅灰，跌用深一点的灰
   const upColor = () => st.stealth ? '#D2D4D8' : st.cfg.redUp ? '#FF5B5B' : '#2FD27A';
   const downColor = () => st.stealth ? '#8C9198' : st.cfg.redUp ? '#2FD27A' : '#FF5B5B';
-  const colorOf = (pct) => pct == null ? '#9A9AA2' : pct >= 0 ? upColor() : downColor();
+  const colorOf = (pct) => pct == null || Math.abs(pct) < 0.005 ? '#9A9AA2' : pct > 0 ? upColor() : downColor();
   const tintOf = (pct) => {
-    if (st.stealth || pct == null) return 'rgba(255,255,255,.08)';
+    if (st.stealth || pct == null || Math.abs(pct) < 0.005) return 'rgba(255,255,255,.08)';
     const c = colorOf(pct);
     return c === '#FF5B5B' ? 'rgba(255,91,91,.16)' : 'rgba(47,210,122,.16)';
   };
@@ -85,6 +86,7 @@
   // ---------- 形态 ----------
   function form() {
     if (st.open) return 'panel';
+    if (!st.cfg.welcomed) return 'welcome';
     if (msg.alert) return 'alert';
     if (st.cfg.mode === 'pinned') return 'island';
     if (st.cfg.mode === 'auto' && st.hover) return 'island';
@@ -104,6 +106,7 @@
     let w, h, r;
     if (f === 'panel') { w = 600; h = panel.offsetHeight; r = 30; }
     else if (f === 'alert') { w = 420; h = 64; r = 32; }
+    else if (f === 'welcome') { w = 460; h = $('welcome').offsetHeight; r = 28; }
     else if (f === 'island') { [, h, r] = SIZES.island; w = islandWidth(); }
     else [w, h, r] = SIZES[f];
     // 变大用带回弹的展开曲线，变小用不回弹的收起曲线
@@ -267,12 +270,15 @@
 
   async function loadMinute(code, force) {
     const c = st.minute[code];
-    if (!force && c && Date.now() - c.at < 30000) return c.data;
+    if (!force && c && Date.now() - c.at < (c.failed ? 4000 : 30000)) return c.data;
     if (c && c.loading) return c.loading;
-    const p = api.getMinute(code).then((data) => {
-      st.minute[code] = { at: Date.now(), data };
-      return data;
-    }).catch(() => { st.minute[code] = { at: Date.now(), data: null }; return null; });
+    // 失败时留着上一次的数据，4 秒后可以再试；成功的结果 30 秒内不重复请求
+    const done = (data) => {
+      const prev = st.minute[code];
+      st.minute[code] = data ? { at: Date.now(), data } : { at: Date.now(), data: (prev && prev.data) || null, failed: true };
+      return st.minute[code].data;
+    };
+    const p = api.getMinute(code).then(done).catch(() => done(null));
     st.minute[code] = Object.assign({}, c || { at: 0, data: null }, { loading: p });
     return p;
   }
@@ -485,11 +491,14 @@
       return `<button type="button" class="chip${flag ? ' flagged' : ''}" data-i="${i}" aria-pressed="${!st.selCode && i === st.sel}">` +
         `<span class="n">${esc(dispName(s))}</span><span class="p num" style="color:${colorOf(s.pct)}">${fmtPct(s.pct)}</span>` +
         `${al || flag ? '<i class="chip-dot" aria-hidden="true"></i>' : ''}</button>`;
-    }).join('');
+    }).join('') + (list.length < MAX_PER_GROUP ? `<button type="button" class="chip chip-add" data-act="add" aria-label="添加股票" title="添加股票（/）"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>` : '');
+    // 列数：6 个以内排一行，再多就分成两行
+    const total = $('chips').children.length;
+    $('chips').style.gridTemplateColumns = `repeat(${total <= 6 ? Math.max(4, total) : Math.ceil(total / 2)}, minmax(0, 1fr))`;
     const s = cur();
     if (!s) {
       $('curName').textContent = '这个分组还没有股票';
-      $('curSub').textContent = '点右上角 ≡ 打开设置添加';
+      $('curSub').textContent = '点下面的 ＋ 添加';
       $('curPrice').textContent = '';
       $('curPct').textContent = '';
       $('curPct').style.background = 'transparent';
@@ -595,7 +604,8 @@
     if (c && c.loading) return c.loading;
     const p = (st.view === 'min5' ? api.getMinute(s.code, 5) : api.getKline(s.code, st.view === 'week' ? 102 : 101))
       .then((data) => {
-        st.charts[key] = { at: Date.now(), data };
+        const prev = st.charts[key];
+        st.charts[key] = data ? { at: Date.now(), data } : { at: Date.now() - ttl + 4000, data: (prev && prev.data) || null };
         // 面板开着时最多留 12 份
         const keys = Object.keys(st.charts);
         if (keys.length > 12) for (const k of keys.slice(0, keys.length - 12)) if (k !== key) delete st.charts[k];
@@ -624,7 +634,7 @@
     st.hitXs = null;
     if (!data) {
       $('curSub').textContent = st.stealth ? '' : codeText + ' · ' + (isIndex(s.code) ? '指数' : MK_NAME[mk]);
-      clearChart(viewLoading(s) ? '加载中…' : st.view === 'min1' ? '暂无分时数据（可能还没开盘）' : '暂无数据');
+      clearChart(viewLoading(s) ? '加载中…' : !st.online ? '连接中断，恢复后自动刷新' : st.view === 'min1' ? '暂无分时数据（可能还没开盘）' : '暂无数据');
       setHeadline(s.price, s.pct);
       return;
     }
@@ -916,6 +926,7 @@
     try { renderPanel(); } catch (e) { console.error('renderPanel', e && e.stack); }
     hadFocus = document.hasFocus();
     openedAt = Date.now();
+    openedBy = st.inside ? 'click' : 'key';
     applyForm();
     syncFocus();
     refreshSelectedMinute(false);
@@ -929,7 +940,9 @@
     const keep = new Set(group().codes);
     for (const c of Object.keys(st.minute)) if (!keep.has(c) && !st.minute[c].loading) delete st.minute[c];
   }
-  function closePanel() {
+  function closePanel(reason) {
+    // 展开不到 2 秒就收起不太正常，记进日志方便排查
+    if (st.open && (reason === 'blur' || reason === 'leave') && Date.now() - openedAt < 2000) diag('[panel] 很快就收起了', 'reason=' + (reason || 'user'), Date.now() - openedAt + 'ms', 'by=' + openedBy);
     st.open = false;
     closeSheets();
     pruneCaches();
@@ -984,7 +997,7 @@
       }
       st.hover = false;
       st.hot = null;
-      if (st.open) closePanel(); else applyForm();
+      if (st.open) closePanel('leave'); else applyForm();
     }, st.cfg.collapseDelayMs);
   }
 
@@ -1070,21 +1083,37 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && st.open) {
       e.preventDefault();
-      if (sheet.kind || $('ctxMenu').classList.contains('show')) { closeSheets(); fitPanel(); } else closePanel();
+      if (sheet.kind || $('ctxMenu').classList.contains('show')) { closeSheets(); renderPanel(); fitPanel(); } else closePanel('esc');
     }
   });
   let keepOpenOnBlur = false; // 导出文件时会弹出保存对话框，那时不收
-  // 只有面板真的拿到过焦点、并且展开超过 0.5 秒后，失去焦点才收起：
-  // 有的 Windows 在窗口刚拿到焦点时会马上把焦点还回去，不加这个判断面板会一闪就没
-  let hadFocus = false, openedAt = 0;
-  window.addEventListener('focus', () => { if (st.open) hadFocus = true; });
+  // 失去焦点时收起（= 用户点了别的地方）。几种情况不收：
+  //   · 鼠标还在面板里：不是用户点了别处，是系统把焦点拿走了（有的 Windows 在窗口刚拿到焦点时会这样）
+  //   · 面板还没真正拿到过焦点，或者刚展开不到 0.5 秒
+  let hadFocus = false, openedAt = 0, openedBy = '';
+  const diag = (...a) => { if (api.log) api.log(a.join(' ')); };
+  window.addEventListener('focus', () => {
+    if (!st.open) return;
+    hadFocus = true;
+    if (Date.now() - openedAt < 2000) diag('[panel] 拿到焦点', Date.now() - openedAt + 'ms');
+  });
   window.addEventListener('blur', () => {
     if (!st.open || keepOpenOnBlur) return;
-    if (!hadFocus || Date.now() - openedAt < 500) { console.warn('[blur] 刚展开就失去焦点，忽略'); return; }
+    const age = Date.now() - openedAt;
+    if (st.inside || !hadFocus || age < 500) {
+      diag('[panel] 失去焦点但不收起', 'inside=' + st.inside, 'hadFocus=' + hadFocus, age + 'ms');
+      // 焦点没了，下次在面板里按下鼠标时再要回来（否则输入框打不了字）
+      focusOn = false;
+      return;
+    }
     st.hover = false;
     clearTimeout(leaveTimer);
-    closePanel();
+    closePanel('blur');
   });
+  // 面板开着但焦点不在：在面板里按下鼠标时把焦点要回来
+  document.addEventListener('mousedown', (e) => {
+    if (st.open && !focusOn && e.target.closest && e.target.closest('#panel')) syncFocus();
+  }, true);
   $('mPrev').addEventListener('click', () => api.mediaCmd('prev'));
   $('mNext').addEventListener('click', () => api.mediaCmd('next'));
   $('mToggle').addEventListener('click', () => {
@@ -1116,6 +1145,7 @@
   $('chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip');
     if (!b) return;
+    if (b.dataset.act === 'add') { openAddSheet(); return; }
     st.sel = Number(b.dataset.i);
     st.selCode = null;
     st.cross = -1;
@@ -1124,7 +1154,7 @@
   });
   $('chips').addEventListener('contextmenu', (e) => {
     const b = e.target.closest('.chip');
-    if (!b) return;
+    if (!b || b.dataset.act) return;
     e.preventDefault();
     const s = stocks()[Number(b.dataset.i)];
     if (s) openCtx(e, s.code, Number(b.dataset.i));
@@ -1167,7 +1197,7 @@
     const b = e.target.closest('button[data-mode]');
     if (b) api.setConfig({ mode: b.dataset.mode });
   });
-  $('btnClose').addEventListener('click', closePanel);
+  $('btnClose').addEventListener('click', () => closePanel('button'));
   // 设置按钮：按当前页面打开对应的设置页
   $('btnSettings').addEventListener('click', () => {
     const map = { stock: 'stock', music: 'music', clip: 'clip', todo: 'todo', msg: msg.kind === 'mail' ? 'mail' : 'notify' };
@@ -1199,6 +1229,10 @@
     sheet.kind = null;
     $('alertSheet').classList.remove('show');
     $('holdSheet').classList.remove('show');
+    $('addSheet').classList.remove('show');
+    // 小窗里的输入框还占着焦点的话放掉，否则会被当成“正在打字”
+    const a = document.activeElement;
+    if (a && a.closest && a.closest('.sheet')) a.blur();
     closeCtx();
     panel.classList.remove('sheet-open');
   }
@@ -1240,6 +1274,8 @@
       const v = Number(rule[r.key]);
       if (!(v > 0)) return r.hint;
       const d = (v - q.price) / q.price * 100;
+      // 现在就已经满足的条件，保存后会马上提醒一次
+      if ((r.key === 'up' && d <= 0) || (r.key === 'down' && d >= 0)) return '现价已经' + (r.key === 'up' ? '高于' : '低于') + '这个价，保存后会马上提醒';
       return '距现价 ' + (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2) + '%';
     }
     if (r.key === 'pct') return '现在 ' + fmtPct(q.pct);
@@ -1417,6 +1453,128 @@
     }
     showAlert({ kind: 'alert', app: '预警', code: ev.code, alertKind: ev.kind, title, body: ev.body, time: ev.time }, ev.cardMs);
   }
+
+
+  // ---------- 添加股票（在面板里直接搜） ----------
+  const add = { results: [], seq: 0, timer: null, hi: 0 };
+  function openAddSheet() {
+    closeSheets();
+    sheet.kind = 'add';
+    $('adInput').value = '';
+    add.results = [];
+    renderAddSheet();
+    $('addSheet').classList.add('show');
+    panel.classList.add('sheet-open');
+    fitPanel();
+    setTimeout(() => $('adInput').focus(), 60);
+  }
+  function renderAddSheet(hint) {
+    const g = group();
+    $('adTitle').textContent = '添加到「' + g.name + '」';
+    const full = g.codes.length >= MAX_PER_GROUP;
+    $('adCount').textContent = `${g.codes.length} / ${MAX_PER_GROUP}`;
+    const list = $('adList');
+    if (full) { list.innerHTML = `<div class="data-empty">这个分组已经满了（最多 ${MAX_PER_GROUP} 只），先移出一些，或者换一个分组</div>`; return; }
+    if (!add.results.length) {
+      list.innerHTML = `<div class="data-empty">${esc(hint || '输入后回车添加第一条 · Esc 关闭')}</div>`;
+      return;
+    }
+    if (add.hi >= add.results.length) add.hi = 0;
+    list.innerHTML = add.results.map((r, i) => {
+      const has = g.codes.includes(r.code);
+      return `<button type="button" class="ad-row${i === add.hi ? ' hi' : ''}" role="option" data-i="${i}"${has ? ' disabled' : ''}>` +
+        `<span class="ad-name">${esc(r.name)}</span><span class="num ad-code">${esc(bare(r.code).toUpperCase())}</span>` +
+        `<span class="ad-type">${esc(r.type || '')}</span><span class="ad-act">${has ? '已在分组里' : '添加'}</span></button>`;
+    }).join('');
+  }
+  function addStock(i) {
+    const r = add.results[i];
+    const g = group();
+    if (!r || g.codes.includes(r.code) || g.codes.length >= MAX_PER_GROUP) return;
+    const groups = JSON.parse(JSON.stringify(st.cfg.groups));
+    groups[st.cfg.activeGroup].codes.push(r.code);
+    // 先改本地，界面立刻有反应；主进程存好后会再推一次配置
+    st.cfg = Object.assign({}, st.cfg, { groups });
+    api.setConfig({ groups });
+    st.segKey = '';
+    renderSegments();
+    $('adInput').value = '';
+    add.results = [];
+    renderAddSheet('已添加 ' + r.name + ' · 可以继续搜下一只');
+    fitPanel();
+    $('adInput').focus();
+  }
+  $('adInput').addEventListener('input', () => {
+    clearTimeout(add.timer);
+    const q = $('adInput').value.trim();
+    if (!q) { add.results = []; renderAddSheet(); fitPanel(); return; }
+    add.timer = setTimeout(async () => {
+      const seq = ++add.seq;
+      let res = null;
+      try { res = await api.search(q); } catch (e) { res = null; }
+      if (seq !== add.seq || sheet.kind !== 'add') return;
+      add.results = (res || []).slice(0, 6);
+      add.hi = Math.max(0, add.results.findIndex((r) => !group().codes.includes(r.code)));
+      renderAddSheet(res === null ? '搜索失败，检查一下网络' : '没有找到「' + q + '」');
+      fitPanel();
+    }, 220);
+  });
+  $('adInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addStock(add.hi); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const n = add.results.length;
+      if (n) { add.hi = (add.hi + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; renderAddSheet(); }
+    }
+  });
+  $('adList').addEventListener('click', (e) => {
+    const b = e.target.closest('.ad-row');
+    if (b && !b.disabled) addStock(Number(b.dataset.i));
+  });
+  $('adClose').addEventListener('click', () => { closeSheets(); renderPanel(); fitPanel(); });
+
+  // ---------- 键盘：← → 换股票，↑ ↓ 换分组，1~4 换图，/ 添加 ----------
+  document.addEventListener('keydown', (e) => {
+    if (!st.open || st.page !== 'stock' || sheet.kind || isTyping() || e.ctrlKey || e.altKey || e.metaKey) return;
+    const n = stocks().length;
+    const views = { 1: 'min1', 2: 'min5', 3: 'day', 4: 'week' };
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && n) {
+      st.sel = st.selCode ? st.sel : (st.sel + (e.key === 'ArrowRight' ? 1 : n - 1)) % n;
+      st.selCode = null;
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      switchGroup(st.cfg.activeGroup + (e.key === 'ArrowDown' ? 1 : -1));
+      return;
+    } else if (views[e.key]) {
+      st.view = views[e.key];
+    } else if (e.key === '/' || e.key === '+') {
+      e.preventDefault();
+      openAddSheet();
+      return;
+    } else return;
+    e.preventDefault();
+    st.cross = -1;
+    renderPanel();
+    refreshSelectedMinute(false);
+  });
+
+  // ---------- 第一次启动的欢迎卡片 ----------
+  function dismissWelcome(thenAdd) {
+    if (st.cfg.welcomed) return;
+    st.cfg = Object.assign({}, st.cfg, { welcomed: true });
+    api.setConfig({ welcomed: true });
+    if (thenAdd) {
+      openPanel(0, 'stock');
+      setTimeout(openAddSheet, 350);
+      return;
+    }
+    applyForm();
+    // 光带亮两下，让人看到它缩到哪去了
+    document.body.classList.add('here');
+    setTimeout(() => document.body.classList.remove('here'), 2400);
+  }
+  $('wlOk').addEventListener('click', () => dismissWelcome(false));
+  $('wlAdd').addEventListener('click', () => dismissWelcome(true));
 
   // ---------- 剪贴板 ----------
   const clip = { q: '', kind: 'all', items: [], editing: null, clearArmed: 0 };
@@ -1880,6 +2038,7 @@
     document.documentElement.style.setProperty('--down', downColor());
     renderSegments();
     renderTicker();
+    $('wlBoss').textContent = keyName(st.cfg.bossKey);
     if (!sheet.kind) renderPanel(); else if (sheet.kind === 'alert') renderAlertSheet();
     renderMusic();
     applyForm();
@@ -1938,7 +2097,14 @@
       renderAll();
       if (rotateChanged) startRotation();
     });
-    api.onStatus((s) => { st.online = s.online; renderPanel(); });
+    api.onStatus((s) => {
+      st.online = s.online;
+      document.body.classList.toggle('offline', !st.online);
+      renderTicker();
+      if (st.open && !sheet.kind) { try { renderPanel(); } catch (e) { console.error('renderPanel', e && e.stack); } }
+      // 恢复后马上把图补上
+      if (st.online && st.open && st.page === 'stock') refreshSelectedMinute(true);
+    });
     if (api.onPageOpen) {
       // 全局快捷键唤出：直接打开对应页面，并把光标放进输入框
       api.onPageOpen((page) => {

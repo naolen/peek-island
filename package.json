@@ -34,7 +34,8 @@
     "test": "node --test test/*.test.js",
     "native": "dotnet publish native/PeekNative/PeekNative.csproj -c Release -o native/publish",
     "dist": "electron-builder --win nsis portable --x64 --publish never",
-    "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots"
+    "smoke": "xvfb-run -a electron --no-sandbox scripts/smoke.js ./shots",
+    "e2e": "xvfb-run -a electron --no-sandbox scripts/e2e.js"
   },
   "devDependencies": {
     "electron": "^45.0.0",

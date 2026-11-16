@@ -122,3 +122,43 @@ test('腾讯备用行情解析', () => {
   assert.ok(q.usNVDA);
   assert.strictEqual(q.usNVDA.time, Date.parse('2026-11-13T16:00:01-05:00'));
 });
+
+const { ConfigStore } = require('../src/config');
+test('配置：首次启动、升级、文件损坏时的恢复', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'peek-cfg-'));
+  // 全新安装：要显示欢迎卡片
+  let s = new ConfigStore(dir);
+  assert.strictEqual(s.get().welcomed, false);
+  s.set({ welcomed: true, groups: [{ name: '我的', codes: ['sh600519'] }] });
+  // 正常重启：读回来，并留下备份
+  s = new ConfigStore(dir);
+  assert.strictEqual(s.get().groups[0].name, '我的');
+  assert.ok(fs.existsSync(path.join(dir, 'config.bak.json')));
+  // 配置文件坏了：从备份恢复，坏文件另存
+  fs.writeFileSync(path.join(dir, 'config.json'), '{"groups": [{"na');
+  s = new ConfigStore(dir);
+  assert.strictEqual(s.get().groups[0].name, '我的');
+  assert.strictEqual(s.recovered, true);
+  assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('config.broken-')));
+  // 老版本的配置（没有 welcomed）：不弹欢迎卡片
+  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'peek-cfg-'));
+  fs.writeFileSync(path.join(dir2, 'config.json'), JSON.stringify({ mode: 'pinned' }));
+  assert.strictEqual(new ConfigStore(dir2).get().welcomed, true);
+  assert.strictEqual(sanitize({ display: 'evil' }).display, 'primary');
+  assert.strictEqual(sanitize({ display: '2528732444' }).display, '2528732444');
+});
+
+const update = require('../src/update');
+test('检查更新：版本比较', () => {
+  assert.strictEqual(update.isNewer('v0.3.1', '0.3.0'), true);
+  assert.strictEqual(update.isNewer('v0.10.0', '0.9.9'), true);
+  assert.strictEqual(update.isNewer('v0.3.0', '0.3.0'), false);
+  assert.strictEqual(update.isNewer('v0.2.9', '0.3.0'), false);
+  assert.strictEqual(update.isNewer('nightly', '0.3.0'), false);
+  const r = update.parseRelease({ tag_name: 'v0.4.0', html_url: 'https://github.com/naolen/peek-island/releases/tag/v0.4.0' }, '0.3.0');
+  assert.deepStrictEqual([r.newer, r.latest], [true, '0.4.0']);
+  // 地址不是 GitHub 的就不用它
+  assert.strictEqual(update.parseRelease({ tag_name: 'v0.4.0', html_url: 'https://evil.example/x' }, '0.3.0').url, update.RELEASES_PAGE);
+  assert.throws(() => update.parseRelease({}, '0.3.0'));
+});

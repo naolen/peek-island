@@ -41,6 +41,8 @@ class NativeHelper extends EventEmitter {
     proc.on('exit', (code) => {
       this.proc = null;
       this.available = false;
+      // 小助手不在了，它报告过的“前台全屏”也就不算数了
+      this.emit('fullscreen', { on: false, primary: true });
       if (this.stopping) return;
       // 崩溃后退避重启：1s、2s、4s … 最长 30s
       const delay = Math.min(30000, 1000 * Math.pow(2, this.restarts++));

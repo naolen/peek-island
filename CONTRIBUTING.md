@@ -26,12 +26,21 @@ npm start
 
 ```bash
 npm test         # 单元测试，必须全部通过
-npm run smoke    # Linux + xvfb：用假数据截图，输出到 ./shots，改了界面请看一眼
+npm run e2e      # 端到端：真实的主进程和界面 + 假的行情服务器，检查各种数据情况下都不报错
+npm run smoke    # 用假数据截图，输出到 ./shots，改了界面请看一眼
+```
+
+`e2e` 和 `smoke` 在 Linux 上需要 xvfb；Windows 上直接运行：
+
+```bash
+npx electron scripts/e2e.js
 ```
 
 - 行情解析、交易时段、预警判断、盈亏计算都是纯函数（`src/quotes.js`、`session.js`、`alerts.js`、`pnl.js`），改这些地方请补上对应的测试。
 - 改了界面，请在 PR 里贴前后截图。`npm run smoke` 生成的截图就可以，需要新状态的话在 `scripts/smoke.js` 里加一步。
 - 改了 `native/PeekNative`，CI 会在 Windows 上编译并检查它能正常启动。
+- 行情接口的返回格式写在 `scripts/fake-market.js` 里。发现真实接口有它没覆盖的情况（某个字段为空、格式变了），请先在那里加上，再改解析代码。
+- 网络请求一律用 `src/http.js` 的 `getText`（走系统代理、不缓存），不要直接用 `fetch`。
 
 ## 代码风格
 

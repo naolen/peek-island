@@ -1,7 +1,8 @@
 // 主进程：顶部透明置顶窗口、托盘、老板键、行情轮询。
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, globalShortcut, nativeImage, shell, dialog } = require('electron');
+const { app, powerMonitor, BrowserWindow, ipcMain, screen, Tray, Menu, globalShortcut, nativeImage, shell, dialog } = require('electron');
 const path = require('path');
-const { ConfigStore, inStealthSchedule, exportGroups, parseImport } = require('./config');
+const { ConfigStore, DEFAULTS, inStealthSchedule, exportGroups, parseImport } = require('./config');
+const update = require('./update');
 const alerts = require('./alerts');
 const pnl = require('./pnl');
 const { sessionOf, partsIn } = require('./session');
@@ -66,6 +67,7 @@ if (!app.requestSingleInstanceLock()) {
 
 // 配置在 ready 之前就要读：省内存模式要在 ready 之前关掉 GPU 加速
 store = new ConfigStore(app.getPath('userData'));
+if (store.recovered) log('[config] 配置文件损坏，已从备份恢复');
 if (store.get().lowMemory) {
   app.disableHardwareAcceleration();
 }
@@ -74,13 +76,42 @@ app.commandLine.appendSwitch('disable-features', 'SpareRendererForSitePerProcess
 
 app.on('second-instance', () => openSettings());
 
+/** 岛显示在哪块屏幕：设置里选的那块，找不到（拔掉了）就用主屏幕 */
+function islandDisplay() {
+  const want = store.get().display;
+  const primary = screen.getPrimaryDisplay();
+  if (want === 'primary') return primary;
+  return screen.getAllDisplays().find((d) => String(d.id) === want) || primary;
+}
+
 function placeIsland() {
   if (!islandWin) return;
-  const d = screen.getPrimaryDisplay();
-  const b = d.bounds;
+  const b = islandDisplay().bounds;
   // 窗口不能比屏幕还高，否则 Windows 会把它挪位置或裁掉
   const h = Math.min(ISLAND_H, b.height);
   islandWin.setBounds({ x: Math.round(b.x + (b.width - ISLAND_W) / 2), y: b.y, width: ISLAND_W, height: h });
+}
+
+// 前台有全屏窗口（看视频、打游戏、放幻灯片）时把岛藏起来
+let fsHidden = false;
+function onFullscreen(m) {
+  const cfg = store.get();
+  const islandOnPrimary = islandDisplay().id === screen.getPrimaryDisplay().id;
+  const want = !!(cfg.hideOnFullscreen && m && m.on && !!m.primary === islandOnPrimary);
+  lastFullscreen = m || null;
+  if (want === fsHidden) return;
+  fsHidden = want;
+  log('[fullscreen]', fsHidden ? '前台全屏，隐藏岛' : '退出全屏，恢复显示');
+  applyVisibility();
+}
+let lastFullscreen = null;
+
+/** 岛该不该显示：用户手动隐藏、或者前台全屏时不显示 */
+function applyVisibility() {
+  if (!islandWin || islandWin.isDestroyed()) return;
+  const show = !hidden && !fsHidden;
+  if (show && !islandWin.isVisible()) { placeIsland(); islandWin.showInactive(); islandWin.setAlwaysOnTop(true, 'screen-saver'); }
+  else if (!show && islandWin.isVisible()) islandWin.hide();
 }
 
 function createIsland() {
@@ -117,7 +148,7 @@ function createIsland() {
   placeIsland();
   watchRenderer(islandWin, 'island');
   islandWin.loadFile(path.join(__dirname, 'renderer', 'island.html'));
-  islandWin.once('ready-to-show', () => { if (!hidden) islandWin.showInactive(); });
+  islandWin.once('ready-to-show', () => applyVisibility());
   islandWin.on('closed', () => { islandWin = null; });
 }
 
@@ -310,21 +341,27 @@ function toggleStealth() {
 async function poll() {
   clearTimeout(pollTimer);
   const cfg = store.get();
+  let q = null;
   try {
-    const q = await feed.fetchQuotes(allCodes());
-    lastQuotes = Object.assign(lastQuotes, q);
-    if (!online) { online = true; broadcast('status', { online }); }
-    computeSessions();
-    broadcast('quotes', lastQuotes);
-    broadcast('session', { sessions, source: feed.currentSource() });
-    broadcastPnl();
-    runAlerts(q);
+    q = await feed.fetchQuotes(allCodes());
   } catch (e) {
-    if (online) { online = false; broadcast('status', { online, error: String(e.message || e) }); }
+    if (online) { online = false; log('[quotes] 连接中断', e && e.message); broadcast('status', { online, error: String(e.message || e) }); }
+  }
+  if (q) {
+    lastQuotes = Object.assign(lastQuotes, q);
+    if (!online) { online = true; log('[quotes] 恢复'); broadcast('status', { online }); }
+    // 下面这些出错不等于断线，各自记日志
+    try {
+      computeSessions();
+      broadcast('quotes', lastQuotes);
+      broadcast('session', { sessions, source: feed.currentSource() });
+    } catch (e) { log('[quotes] 广播出错', e); }
+    try { broadcastPnl(); } catch (e) { log('[pnl] 出错', e); }
+    try { runAlerts(q); } catch (e) { log('[alert] 出错', e); }
   }
   refreshFx().catch(() => {});
-  // 所有市场都不在交易时段时，慢下来
-  const active = !Object.keys(sessions).length || Object.values(sessions).some((s) => s.active);
+  // 所有市场都不在交易时段时，慢下来；断线时按正常间隔重试
+  const active = !online || !Object.keys(sessions).length || Object.values(sessions).some((x) => x.active);
   pollTimer = setTimeout(poll, active ? cfg.refreshMs : cfg.idleRefreshMs);
 }
 
@@ -341,9 +378,9 @@ function sessionWatch() {
 
 function setHidden(h) {
   hidden = h;
-  if (!islandWin) return;
-  if (hidden) islandWin.hide();
-  else { placeIsland(); islandWin.showInactive(); }
+  // 用户手动要求显示时，全屏隐藏也先让一让（直到下一次进入全屏）
+  if (!hidden) fsHidden = false;
+  applyVisibility();
   buildTray();
 }
 
@@ -353,7 +390,7 @@ let shortcutStatus = {};
 /** 唤出岛并直接打开某一页（剪贴板 / 待办），同时让窗口能接收键盘输入 */
 function summon(page) {
   if (!islandWin) return;
-  if (hidden) setHidden(false);
+  if (hidden || fsHidden) setHidden(false);
   setIslandFocus(true);
   islandWin.webContents.send('page:open', page);
 }
@@ -383,14 +420,16 @@ function registerShortcuts() {
 /** 岛窗口平时不抢焦点；在剪贴板 / 待办页需要打字时临时允许 */
 function setIslandFocus(on) {
   if (!islandWin || islandWin.isDestroyed()) return;
-  if (process.env.PEEK_DEBUG || store.get().debugLog) log('[focus]', on);
   if (on) {
     islandWin.setFocusable(true);
+    // Windows 上 setFocusable(true) 会顺带让窗口出现在任务栏，这里再藏回去
+    islandWin.setSkipTaskbar(true);
     islandWin.focus();
   } else if (islandWin.isFocusable()) {
     // 用户点了别的软件时焦点已经过去了，这时不要再动焦点
     if (islandWin.isFocused()) islandWin.blur();
     islandWin.setFocusable(false);
+    islandWin.setSkipTaskbar(true);
   }
 }
 
@@ -407,6 +446,8 @@ function applyConfig(patch) {
     updateStealth();
   }
   if (islandWin && before.hideInCapture !== cfg.hideInCapture) setCapture(cfg.hideInCapture);
+  if (before.display !== cfg.display) placeIsland();
+  if (before.hideOnFullscreen !== cfg.hideOnFullscreen || before.display !== cfg.display) onFullscreen(lastFullscreen);
   if (before.fxAuto !== cfg.fxAuto || before.fxUSD !== cfg.fxUSD || before.fxHKD !== cfg.fxHKD) {
     broadcast('fx', currentFx());
     if (cfg.fxAuto) refreshFx(true).catch(() => {});
@@ -491,6 +532,7 @@ function setupNative() {
   });
   // 小助手发现剪贴板变了（Windows 剪贴板序号变化）
   native.on('clipboard', () => { if (clipWatcher) clipWatcher.poke(); });
+  native.on('fullscreen', onFullscreen);
   native.on('level', (l) => {
     if (islandWin && !islandWin.isDestroyed()) islandWin.webContents.send('level', l.peak);
   });
@@ -768,6 +810,13 @@ function setupIpc() {
     return app.getLoginItemSettings().openAtLogin;
   });
   ipcMain.handle('app:info', () => ({ version: app.getVersion() }));
+  ipcMain.handle('displays:get', () => {
+    const primary = screen.getPrimaryDisplay().id;
+    return screen.getAllDisplays().map((d, i) => ({
+      id: String(d.id), primary: d.id === primary,
+      label: `屏幕 ${i + 1}${d.id === primary ? '（主屏幕）' : ''} · ${Math.round(d.size.width * d.scaleFactor)}×${Math.round(d.size.height * d.scaleFactor)}`
+    }));
+  });
   // 关于页显示的内存占用：所有 Electron 进程的工作集 + 原生小助手
   ipcMain.handle('app:memory', async () => {
     const metrics = app.getAppMetrics();
@@ -781,10 +830,33 @@ function setupIpc() {
     const mb = (kb) => Math.round(kb / 1024);
     return { totalMB: mb(total + nativeKb), processes: metrics.length + (nativeKb ? 1 : 0), gpu: mb(gpu), native: mb(nativeKb) };
   });
+  // 界面写诊断日志（限速：每分钟最多 30 行）
+  let logCount = 0, logWindow = 0;
+  ipcMain.on('log:write', (e, text) => {
+    const now = Date.now();
+    if (now - logWindow > 60000) { logWindow = now; logCount = 0; }
+    if (++logCount > 30 || typeof text !== 'string') return;
+    log(text.slice(0, 300));
+  });
   ipcMain.on('focus:set', (e, on) => {
     if (BrowserWindow.fromWebContents(e.sender) === islandWin) setIslandFocus(!!on);
   });
   ipcMain.handle('shortcuts:get', () => shortcutStatus);
+  ipcMain.handle('update:check', () => update.check(app.getVersion()));
+  // 打开数据文件夹 / 在文件夹里选中日志文件
+  ipcMain.on('folder:open', (_e, kind) => {
+    const file = path.join(app.getPath('userData'), 'logs', 'main.log');
+    if (kind === 'log' && fs.existsSync(file)) shell.showItemInFolder(file);
+    else shell.openPath(app.getPath('userData'));
+  });
+  // 恢复默认设置：外观、行为、快捷键回到默认；分组、持仓、预警、邮箱、通知名单保留
+  ipcMain.handle('config:reset', () => {
+    const KEEP = ['groups', 'activeGroup', 'holdings', 'alerts', 'indexes', 'mailAccounts', 'notifyAllowed', 'notifyMuted', 'notifyKnownApps', 'welcomed'];
+    const patch = {};
+    for (const [k, v] of Object.entries(DEFAULTS)) if (!KEEP.includes(k)) patch[k] = JSON.parse(JSON.stringify(v));
+    log('[config] 恢复默认设置');
+    return applyConfig(patch);
+  });
   ipcMain.on('link:open', (_e, url) => {
     if (typeof url === 'string' && /^https:\/\//.test(url)) shell.openExternal(url);
   });
@@ -808,6 +880,8 @@ app.whenReady().then(() => {
     setInterval(() => log('[mem]', app.getAppMetrics().map((m) => m.type + ':' + Math.round(m.memory.workingSetSize / 1024) + 'MB').join(' ')), 10000);
   }
   setupNative();
+  // 电脑从睡眠中醒来：马上刷新一次，并把岛放回原位（睡眠期间屏幕可能变了）
+  powerMonitor.on('resume', () => { log('[power] 唤醒'); placeIsland(); applyVisibility(); poll(); });
   screen.on('display-metrics-changed', placeIsland);
   screen.on('display-added', placeIsland);
   screen.on('display-removed', placeIsland);
